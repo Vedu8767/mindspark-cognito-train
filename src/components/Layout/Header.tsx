@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2 } from 'lucide-react';
+import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/AuthContext';
 
 interface HeaderProps {
   currentPage: string;
@@ -8,6 +9,7 @@ interface HeaderProps {
 }
 
 const Header = ({ currentPage, onNavigate }: HeaderProps) => {
+  const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navigationItems = [
@@ -59,12 +61,20 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
           {/* User Profile */}
           <div className="hidden md:flex items-center space-x-3">
             <div className="text-right">
-              <p className="text-sm font-medium text-foreground">Mrs. Sharma</p>
+              <p className="text-sm font-medium text-foreground">{user?.name || 'Guest'}</p>
               <p className="text-xs text-muted-foreground">Welcome back!</p>
             </div>
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent to-accent-light flex items-center justify-center">
               <User className="h-5 w-5 text-accent-foreground" />
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -108,13 +118,25 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
             </nav>
             
             {/* Mobile User Profile */}
-            <div className="mt-4 pt-4 border-t border-border flex items-center space-x-3">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-accent to-accent-light flex items-center justify-center">
-                <User className="h-6 w-6 text-accent-foreground" />
-              </div>
-              <div>
-                <p className="text-base font-medium text-foreground">Mrs. Sharma</p>
-                <p className="text-sm text-muted-foreground">Welcome back!</p>
+            <div className="mt-4 pt-4 border-t border-border">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-accent to-accent-light flex items-center justify-center">
+                    <User className="h-6 w-6 text-accent-foreground" />
+                  </div>
+                  <div>
+                    <p className="text-base font-medium text-foreground">{user?.name || 'Guest'}</p>
+                    <p className="text-sm text-muted-foreground">Welcome back!</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={logout}
+                  className="text-muted-foreground hover:text-destructive"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </div>

@@ -40,11 +40,13 @@ const CognitiveChart = () => {
               />
               <Tooltip 
                 contentStyle={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                  border: '1px solid #e2e8f0',
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
-                  boxShadow: '0 4px 20px -4px rgba(0, 0, 0, 0.1)'
+                  boxShadow: '0 4px 20px -4px rgba(0, 0, 0, 0.1)',
+                  color: 'hsl(var(--foreground))'
                 }}
+                labelStyle={{ color: 'hsl(var(--foreground))' }}
               />
               <Line 
                 type="monotone" 

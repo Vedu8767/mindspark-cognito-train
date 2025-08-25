@@ -1,75 +1,14 @@
-import { useState, useEffect } from 'react';
-import Header from '@/components/Layout/Header';
-import Dashboard from '@/pages/Dashboard';
-import Games from '@/pages/Games';
-import MemoryMatchingGame from '@/components/Games/MemoryMatchingGame';
+import { AuthProvider } from '@/context/AuthContext';
+import ProtectedRoute from '@/components/Layout/ProtectedRoute';
+import AppLayout from '@/components/Layout/AppLayout';
 
 const Index = () => {
-  const [currentPage, setCurrentPage] = useState('dashboard');
-  const [currentGame, setCurrentGame] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleStartGame = (event: any) => {
-      setCurrentGame(event.detail);
-    };
-
-    window.addEventListener('startGame', handleStartGame);
-    return () => window.removeEventListener('startGame', handleStartGame);
-  }, []);
-
-  const handleGameComplete = (score: number) => {
-    console.log(`Game completed with score: ${score}`);
-    setCurrentGame(null);
-    setCurrentPage('games');
-  };
-
-  const handleGameExit = () => {
-    setCurrentGame(null);
-    setCurrentPage('games');
-  };
-
-  // If playing a game, show the game component
-  if (currentGame === 'memory-matching') {
-    return (
-      <MemoryMatchingGame 
-        onComplete={handleGameComplete}
-        onExit={handleGameExit}
-      />
-    );
-  }
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'games':
-        return <Games />;
-      case 'analytics':
-        return (
-          <div className="glass-card p-8 text-center">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Analytics & Progress</h2>
-            <p className="text-muted-foreground">Detailed analytics coming soon...</p>
-          </div>
-        );
-      case 'articles':
-        return (
-          <div className="glass-card p-8 text-center">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Brain Health Articles</h2>
-            <p className="text-muted-foreground">Educational content coming soon...</p>
-          </div>
-        );
-      default:
-        return <Dashboard />;
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary">
-      <Header currentPage={currentPage} onNavigate={setCurrentPage} />
-      <main className="container mx-auto px-4 lg:px-6 py-8">
-        {renderPage()}
-      </main>
-    </div>
+    <AuthProvider>
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    </AuthProvider>
   );
 };
 

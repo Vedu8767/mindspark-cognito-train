@@ -1,15 +1,17 @@
 import { Calendar, Flame, Star, Zap, Brain, Target } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import ProgressCard from '@/components/Dashboard/ProgressCard';
 import CognitiveChart from '@/components/Dashboard/CognitiveChart';
 
 const Dashboard = () => {
+  const { user } = useAuth();
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Welcome Section */}
       <div className="glass-card-strong p-8">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">Good Morning, Mrs. Sharma!</h1>
+            <h1 className="text-3xl font-bold text-foreground">Good Morning, {user?.name || 'Guest'}!</h1>
             <p className="text-lg text-muted-foreground">Ready for today's brain training session?</p>
           </div>
           <div className="flex items-center space-x-4">
