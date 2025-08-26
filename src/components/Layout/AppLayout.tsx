@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Header from '@/components/Layout/Header';
 import Dashboard from '@/pages/Dashboard';
@@ -32,6 +32,16 @@ const AppLayout = () => {
     setCurrentPage('games');
   };
 
+  // Game loading component
+  const GameLoader = () => (
+    <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">Loading game...</p>
+      </div>
+    </div>
+  );
+
   // If playing a game, show the game component
   if (currentGame === 'memory-matching') {
     return (
@@ -39,6 +49,54 @@ const AppLayout = () => {
         onComplete={handleGameComplete}
         onExit={handleGameExit}
       />
+    );
+  }
+
+  if (currentGame === 'attention-focus') {
+    const AttentionFocusGame = lazy(() => import('@/components/Games/AttentionFocusGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <AttentionFocusGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'reaction-speed') {
+    const ReactionSpeedGame = lazy(() => import('@/components/Games/ReactionSpeedGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <ReactionSpeedGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'pattern-recognition') {
+    const PatternRecognitionGame = lazy(() => import('@/components/Games/PatternRecognitionGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <PatternRecognitionGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'word-memory') {
+    const WordMemoryGame = lazy(() => import('@/components/Games/WordMemoryGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <WordMemoryGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
     );
   }
 

@@ -138,12 +138,8 @@ const Games = () => {
   ];
 
   const handlePlayGame = (gameId: string) => {
-    if (gameId === 'memory-matching') {
-      // This will be handled by the parent component
-      window.dispatchEvent(new CustomEvent('startGame', { detail: gameId }));
-    } else {
-      console.log(`Starting game: ${gameId} (not implemented yet)`);
-    }
+    // Dispatch event to start any game
+    window.dispatchEvent(new CustomEvent('startGame', { detail: gameId }));
   };
 
   return (
