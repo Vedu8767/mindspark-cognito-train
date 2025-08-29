@@ -143,7 +143,7 @@ const Articles = () => {
   });
 
   const featuredArticles = filteredArticles.filter(article => article.featured);
-  const regularArticles = filteredArticles.filter(article => !article.featured);
+  const regularArticles = filteredArticles;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -268,7 +268,12 @@ const Articles = () => {
                         </div>
                       </div>
                       
-                      <Button variant="ghost" size="sm" className="text-primary hover:text-primary-dark group-hover:translate-x-1 transition-all">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-primary hover:text-primary-dark group-hover:translate-x-1 transition-all"
+                        onClick={() => window.open(`/article/${article.id}`, '_blank')}
+                      >
                         Read More
                         <ArrowRight className="h-3 w-3 ml-1" />
                       </Button>
@@ -290,8 +295,8 @@ const Articles = () => {
             <h2 className="text-2xl font-semibold text-foreground">All Articles</h2>
             <p className="text-muted-foreground">
               {selectedCategory !== "All" 
-                ? `${regularArticles.length} articles in ${selectedCategory}` 
-                : `${regularArticles.length} articles available`}
+                ? `${filteredArticles.length} articles in ${selectedCategory}` 
+                : `${filteredArticles.length} articles available`}
             </p>
           </div>
           
@@ -326,7 +331,12 @@ const Articles = () => {
                         </div>
                       </div>
                       
-                      <Button variant="ghost" size="sm" className="text-primary hover:text-primary-dark">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-primary hover:text-primary-dark"
+                        onClick={() => window.open(`/article/${article.id}`, '_blank')}
+                      >
                         <BookOpen className="h-4 w-4" />
                       </Button>
                     </div>
