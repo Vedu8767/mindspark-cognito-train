@@ -100,6 +100,90 @@ const AppLayout = () => {
     );
   }
 
+  if (currentGame === 'math-challenge') {
+    const MathChallengeGame = lazy(() => import('@/components/Games/MathChallengeGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <MathChallengeGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'visual-processing') {
+    const VisualProcessingGame = lazy(() => import('@/components/Games/VisualProcessingGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <VisualProcessingGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'executive-function') {
+    const ExecutiveFunctionGame = lazy(() => import('@/components/Games/ExecutiveFunctionGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <ExecutiveFunctionGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'spatial-navigation') {
+    const SpatialNavigationGame = lazy(() => import('@/components/Games/SpatialNavigationGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <SpatialNavigationGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'processing-speed') {
+    const ProcessingSpeedGame = lazy(() => import('@/components/Games/ProcessingSpeedGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <ProcessingSpeedGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'audio-memory') {
+    const AudioMemoryGame = lazy(() => import('@/components/Games/AudioMemoryGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <AudioMemoryGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
+  if (currentGame === 'tower-of-hanoi') {
+    const TowerOfHanoiGame = lazy(() => import('@/components/Games/TowerOfHanoiGame'));
+    return (
+      <Suspense fallback={<GameLoader />}>
+        <TowerOfHanoiGame 
+          onComplete={handleGameComplete}
+          onExit={handleGameExit}
+        />
+      </Suspense>
+    );
+  }
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
