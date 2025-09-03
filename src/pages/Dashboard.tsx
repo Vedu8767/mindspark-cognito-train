@@ -77,26 +77,8 @@ const Dashboard = () => {
 
           {/* Main Content Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2">
               <CognitiveChart />
-              
-              {/* Quick Progress Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ProgressCard
-                  title="Best Domain"
-                  value="Attention"
-                  change="89% average"
-                  icon="zap"
-                  color="accent"
-                />
-                <ProgressCard
-                  title="AI Adaptations"
-                  value="12"
-                  change="This week"
-                  icon="award"
-                  color="secondary"
-                />
-              </div>
             </div>
             
             <div className="space-y-6">
@@ -106,49 +88,157 @@ const Dashboard = () => {
         </TabsContent>
 
         <TabsContent value="progress" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="lg:col-span-2">
-              <CognitiveChart />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:col-span-2">
-              <ProgressCard
-                title="Overall Score"
-                value="84%"
-                change="+5% this week"
-                icon="trending"
-                color="primary"
-              />
-              <ProgressCard
-                title="Games Completed"
-                value="23"
-                change="+3 this week"
-                icon="target"
-                color="success"
-              />
-              <ProgressCard
-                title="Processing Speed"
-                value="Advanced"
-                change="Level up!"
-                icon="zap"
-                color="accent"
-              />
-              <ProgressCard
-                title="Memory Score"
-                value="91%"
-                change="+8% this week"
-                icon="award"
-                color="secondary"
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <ProgressCard
+              title="Overall Score"
+              value="84%"
+              change="+5% this week"
+              icon="trending"
+              color="primary"
+            />
+            <ProgressCard
+              title="Games Completed"
+              value="23"
+              change="+3 this week"
+              icon="target"
+              color="success"
+            />
+            <ProgressCard
+              title="Processing Speed"
+              value="Advanced"
+              change="Level up!"
+              icon="zap"
+              color="accent"
+            />
+            <ProgressCard
+              title="Memory Score"
+              value="91%"
+              change="+8% this week"
+              icon="award"
+              color="secondary"
+            />
+          </div>
+          
+          {/* Detailed Progress Tracking */}
+          <div className="glass-card p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
+              <Target className="h-5 w-5 mr-2 text-primary" />
+              Detailed Progress Breakdown
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="p-4 bg-primary/10 rounded-lg">
+                  <h4 className="font-medium text-foreground mb-2">Memory Training</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Short-term Memory</span>
+                      <span className="text-success">92%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Working Memory</span>
+                      <span className="text-success">87%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Pattern Recognition</span>
+                      <span className="text-success">91%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 bg-accent/10 rounded-lg">
+                  <h4 className="font-medium text-foreground mb-2">Attention Skills</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Sustained Attention</span>
+                      <span className="text-success">89%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Selective Attention</span>
+                      <span className="text-success">85%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Divided Attention</span>
+                      <span className="text-accent">78%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="p-4 bg-success/10 rounded-lg">
+                  <h4 className="font-medium text-foreground mb-2">Executive Function</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Problem Solving</span>
+                      <span className="text-success">94%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Planning</span>
+                      <span className="text-success">88%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Cognitive Flexibility</span>
+                      <span className="text-success">82%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 bg-secondary/10 rounded-lg">
+                  <h4 className="font-medium text-foreground mb-2">Processing Speed</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Reaction Time</span>
+                      <span className="text-success">86%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Information Processing</span>
+                      <span className="text-success">90%</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Visual Processing</span>
+                      <span className="text-success">88%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <CognitiveChart />
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ActivityFeed />
+            
+            {/* Training Calendar */}
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
+                <Calendar className="h-5 w-5 mr-2 text-primary" />
+                Training Calendar
+              </h3>
+              <div className="grid grid-cols-7 gap-2 mb-4">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} className="text-center text-xs font-medium text-muted-foreground p-2">
+                    {day}
+                  </div>
+                ))}
+                {Array.from({ length: 35 }, (_, i) => (
+                  <div key={i} className={`aspect-square rounded-lg flex items-center justify-center text-xs ${
+                    i % 7 === 0 ? 'bg-success/20 text-success' : 
+                    i % 5 === 0 ? 'bg-primary/20 text-primary' : 
+                    'bg-muted/20 text-muted-foreground'
+                  }`}>
+                    {i + 1}
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-success rounded-full"></div>
+                  <span className="text-muted-foreground">Training Day</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-3 h-3 bg-primary rounded-full"></div>
+                  <span className="text-muted-foreground">Streak Bonus</span>
+                </div>
+              </div>
+            </div>
           </div>
         </TabsContent>
 
