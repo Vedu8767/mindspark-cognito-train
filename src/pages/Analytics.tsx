@@ -58,22 +58,28 @@ const Analytics = () => {
       {/* Detailed Chart */}
       <CognitiveChart />
 
-      {/* Coming Soon Features */}
+      {/* Advanced Features */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="glass-card p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">🔮 Coming Soon</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-4">📊 Advanced Analytics</h3>
           <div className="space-y-3">
-            <div className="p-3 bg-primary/10 rounded-lg">
+            <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
               <h4 className="font-medium text-foreground">Detailed Performance Reports</h4>
-              <p className="text-sm text-muted-foreground">Export comprehensive PDF reports of your progress</p>
+              <p className="text-sm text-muted-foreground mb-3">Export comprehensive PDF reports of your progress</p>
+              <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+                Generate Report
+              </button>
+            </div>
+            <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
+              <h4 className="font-medium text-foreground">AI Trend Analysis</h4>
+              <p className="text-sm text-muted-foreground mb-3">Advanced AI insights and predictions</p>
+              <button className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">
+                View AI Insights
+              </button>
             </div>
             <div className="p-3 bg-success/10 rounded-lg">
               <h4 className="font-medium text-foreground">Comparative Analytics</h4>
               <p className="text-sm text-muted-foreground">Compare your progress with age-matched peers</p>
-            </div>
-            <div className="p-3 bg-accent/10 rounded-lg">
-              <h4 className="font-medium text-foreground">AI Trend Analysis</h4>
-              <p className="text-sm text-muted-foreground">Advanced AI insights and predictions</p>
             </div>
           </div>
         </div>
