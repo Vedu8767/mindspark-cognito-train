@@ -25,12 +25,29 @@ const Analytics = () => {
     trainingDays: 28,
     achievements: 15,
     bestScore: "95% (Memory Matching)",
+    totalSessions: 142,
+    avgSessionDuration: "18 minutes",
+    longestStreak: 45,
+    currentStreak: 12,
     weeklyProgress: {
       memory: "+12% improvement",
       attention: "+8% improvement",
       executive: "+15% improvement",
       processing: "+6% improvement",
     },
+    detailedScores: {
+      memory: { current: 85, previous: 78, best: 95 },
+      attention: { current: 82, previous: 79, best: 88 },
+      executive: { current: 91, previous: 86, best: 94 },
+      processing: { current: 78, previous: 75, best: 82 },
+    },
+    gameStats: [
+      { name: "Memory Matching", sessionsPlayed: 35, averageScore: 85, bestScore: 95, timeSpent: "4h 20m" },
+      { name: "Attention Focus", sessionsPlayed: 28, averageScore: 82, bestScore: 90, timeSpent: "3h 45m" },
+      { name: "Executive Function", sessionsPlayed: 32, averageScore: 91, bestScore: 98, timeSpent: "5h 10m" },
+      { name: "Processing Speed", sessionsPlayed: 25, averageScore: 78, bestScore: 85, timeSpent: "2h 30m" },
+      { name: "Pattern Recognition", sessionsPlayed: 22, averageScore: 76, bestScore: 88, timeSpent: "2h 15m" },
+    ],
   };
 
   const handleGenerateReport = async () => {
