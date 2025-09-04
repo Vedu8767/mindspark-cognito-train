@@ -1,7 +1,60 @@
 import { TrendingUp, Calendar, Award, Target } from 'lucide-react';
+import { useState } from 'react';
 import CognitiveChart from '@/components/Dashboard/CognitiveChart';
+import AIInsightsModal from '@/components/Dashboard/AIInsightsModal';
+import { generatePDFReport, ReportData } from '@/lib/pdfReportGenerator';
+import { generateAIInsights, CognitiveData } from '@/lib/aiInsights';
+import { useToast } from '@/hooks/use-toast';
 
 const Analytics = () => {
+  const [showAIInsights, setShowAIInsights] = useState(false);
+  const { toast } = useToast();
+
+  // Sample cognitive data (in real app, this would come from user's actual data)
+  const cognitiveData: CognitiveData = {
+    memory: [75, 78, 82, 85, 88, 87, 90],
+    attention: [68, 72, 75, 78, 80, 83, 85],
+    executive: [82, 85, 87, 90, 92, 89, 94],
+    processing: [70, 73, 76, 74, 77, 80, 82],
+  };
+
+  const reportData: ReportData = {
+    userName: "John Doe",
+    reportDate: new Date().toLocaleDateString(),
+    overallImprovement: "+23%",
+    trainingDays: 28,
+    achievements: 15,
+    bestScore: "95% (Memory Matching)",
+    weeklyProgress: {
+      memory: "+12% improvement",
+      attention: "+8% improvement",
+      executive: "+15% improvement",
+      processing: "+6% improvement",
+    },
+  };
+
+  const handleGenerateReport = async () => {
+    try {
+      await generatePDFReport(reportData);
+      toast({
+        title: "Report Generated",
+        description: "Your PDF report has been downloaded successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to generate report. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleViewAIInsights = () => {
+    setShowAIInsights(true);
+  };
+
+  const aiInsights = generateAIInsights(cognitiveData);
+
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header */}
@@ -66,14 +119,20 @@ const Analytics = () => {
             <div className="p-3 bg-primary/10 rounded-lg border border-primary/20">
               <h4 className="font-medium text-foreground">Detailed Performance Reports</h4>
               <p className="text-sm text-muted-foreground mb-3">Export comprehensive PDF reports of your progress</p>
-              <button className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+              <button 
+                onClick={handleGenerateReport}
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
                 Generate Report
               </button>
             </div>
             <div className="p-3 bg-accent/10 rounded-lg border border-accent/20">
               <h4 className="font-medium text-foreground">AI Trend Analysis</h4>
               <p className="text-sm text-muted-foreground mb-3">Advanced AI insights and predictions</p>
-              <button className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors">
+              <button 
+                onClick={handleViewAIInsights}
+                className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors"
+              >
                 View AI Insights
               </button>
             </div>
@@ -106,6 +165,12 @@ const Analytics = () => {
           </div>
         </div>
       </div>
+
+      <AIInsightsModal 
+        open={showAIInsights}
+        onOpenChange={setShowAIInsights}
+        insights={aiInsights}
+      />
     </div>
   );
 };
