@@ -59,7 +59,10 @@ export const useGameAnalytics = () => {
   }, []);
 
   const endSession = useCallback((completed: boolean, timeLeft: number) => {
-    if (!currentSession.current) return;
+    if (!currentSession.current) {
+      console.log('No current session to end');
+      return null;
+    }
 
     const endTime = Date.now();
     const sessionDuration = endTime - currentSession.current.startTime;
@@ -73,6 +76,14 @@ export const useGameAnalytics = () => {
     currentSession.current.timeLeft = timeLeft;
     currentSession.current.accuracy = totalMoves.current > 0 ? correctMoves.current / totalMoves.current : 0;
     currentSession.current.speed = Math.min(1, 2000 / avgClickInterval); // Normalize speed
+
+    console.log('Session ended:', {
+      completed,
+      accuracy: currentSession.current.accuracy,
+      speed: currentSession.current.speed,
+      moves: currentSession.current.moves,
+      matches: currentSession.current.matches
+    });
 
     setSessions(prev => [...prev.slice(-19), currentSession.current!]); // Keep last 20 sessions
     return currentSession.current;

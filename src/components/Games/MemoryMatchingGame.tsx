@@ -160,24 +160,37 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
   const endGame = () => {
     setGameComplete(true);
     
+    // Check if level was completed successfully
+    const levelCompleted = matches === gameConfig?.symbolCount;
+    console.log('Game ending - Level completed:', levelCompleted, 'Matches:', matches, 'Required:', gameConfig?.symbolCount);
+    
     // End analytics session
-    const session = analytics.endSession(matches === gameConfig?.symbolCount, timeLeft);
+    const session = analytics.endSession(levelCompleted, timeLeft);
     
     if (session && context && gameConfig) {
       // Update bandit with performance data
       const { performance, reward } = analytics.updateBandit(context, gameConfig, session);
       
-      // Calculate level progression
-      const shouldAdvance = performance.completed && performance.accuracy > 0.7 && reward > 50;
-      const shouldRetry = !performance.completed || performance.accuracy < 0.3;
+      console.log('Performance data:', performance);
+      console.log('Reward:', reward);
       
-      if (shouldAdvance && currentLevel < 25) {
+      // Simplified level progression - advance if completed successfully
+      if (levelCompleted && currentLevel < 25) {
+        console.log('Advancing to next level');
         const newLevel = currentLevel + 1;
         setCurrentLevel(newLevel);
         localStorage.setItem('memoryGameLevel', newLevel.toString());
         setLevelProgress(Math.min(100, (newLevel / 25) * 100));
-      } else if (shouldRetry && currentLevel > 1) {
-        // Don't automatically decrease level, let player choose
+      }
+    } else {
+      // Fallback progression if analytics fail
+      console.log('Analytics unavailable, using fallback progression');
+      if (levelCompleted && currentLevel < 25) {
+        console.log('Fallback: Advancing to next level');
+        const newLevel = currentLevel + 1;
+        setCurrentLevel(newLevel);
+        localStorage.setItem('memoryGameLevel', newLevel.toString());
+        setLevelProgress(Math.min(100, (newLevel / 25) * 100));
       }
     }
 
@@ -188,6 +201,7 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     const levelBonus = currentLevel * 5;
     const score = Math.min(100, timeBonus + moveEfficiency + matchBonus + levelBonus);
     
+    console.log('Final score:', score);
     setTimeout(() => onComplete(score), 1000);
   };
 
