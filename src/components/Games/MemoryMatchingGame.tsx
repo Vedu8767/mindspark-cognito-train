@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { RotateCcw, Home, Trophy, Star, Target, Clock, Brain } from 'lucide-react';
+import { RotateCcw, Home, Trophy, Star, Target, Clock, Brain, Sparkles, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { memoryGameBandit, GameConfig, Context } from '@/lib/contextualBandit';
+import { memoryGameBandit, GameAction, UserContext } from '@/lib/bandit';
 import { useGameAnalytics } from '@/hooks/useGameAnalytics';
 
 interface Card {
@@ -30,33 +30,47 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     const saved = localStorage.getItem('memoryGameLevel');
     return saved ? parseInt(saved) : 1;
   });
-  const [gameConfig, setGameConfig] = useState<GameConfig | null>(null);
-  const [context, setContext] = useState<Context | null>(null);
+  const [gameConfig, setGameConfig] = useState<GameAction | null>(null);
+  const [context, setContext] = useState<UserContext | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [levelProgress, setLevelProgress] = useState(0);
+  const [adaptiveTimeBonus, setAdaptiveTimeBonus] = useState(0);
   
   const analytics = useGameAnalytics();
 
-  const allSymbols = ['🧠', '🎯', '⚡', '🌟', '🎪', '🎨', '🎭', '🎨', '🔥', '💎', '🚀', '🎵', '🌈', '⭐', '🎲', '🎪'];
+  const allSymbols = ['🧠', '🎯', '⚡', '🌟', '🎪', '🎨', '🎭', '🔮', '🔥', '💎', '🚀', '🎵', '🌈', '⭐', '🎲', '🦋'];
 
   useEffect(() => {
     initializeLevel();
   }, [currentLevel]);
 
   const initializeLevel = () => {
-    // Get context for current level
+    // Get context for current level with full user analytics
     const levelContext = analytics.getContext(currentLevel);
     setContext(levelContext);
     
-    // Get optimal game configuration from bandit
+    // Use Epsilon-Greedy Bandit to select optimal action
     const config = memoryGameBandit.selectAction(levelContext);
     setGameConfig(config);
     
-    // Initialize game with bandit configuration
+    console.log('[Game] Level initialized:', {
+      level: currentLevel,
+      userType: levelContext.userType,
+      frustration: levelContext.frustrationLevel?.toFixed(2),
+      config: {
+        gridSize: config.gridSize,
+        timeLimit: config.timeLimit,
+        symbolCount: config.symbolCount,
+        difficulty: config.difficultyMultiplier.toFixed(2)
+      }
+    });
+    
+    // Initialize game with bandit-selected configuration
     initializeGame(config);
     
-    // Show preview for higher levels
-    if (currentLevel > 3) {
+    // Show preview for higher levels or if user needs help
+    const showPreviewLevel = currentLevel > 3 || (levelContext.frustrationLevel || 0) > 0.5;
+    if (showPreviewLevel) {
       setShowPreview(true);
       setTimeout(() => setShowPreview(false), config.previewTime);
     }
@@ -77,7 +91,16 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     }
   }, [matches, gameComplete, gameConfig]);
 
-  const initializeGame = (config?: GameConfig) => {
+  // Adaptive timer: add bonus time for correct matches if enabled
+  useEffect(() => {
+    if (gameConfig?.adaptiveTimer && matches > 0 && gameStarted) {
+      const bonus = Math.floor(3 * gameConfig.difficultyMultiplier);
+      setAdaptiveTimeBonus(prev => prev + bonus);
+      setTimeLeft(prev => prev + bonus);
+    }
+  }, [matches]);
+
+  const initializeGame = (config?: GameAction) => {
     const activeConfig = config || gameConfig;
     if (!activeConfig) return;
 
@@ -99,6 +122,7 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     setGameStarted(false);
     setGameComplete(false);
     setFlippedCards([]);
+    setAdaptiveTimeBonus(0);
     
     // Start analytics session
     analytics.startSession(currentLevel);
@@ -162,7 +186,6 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     
     // Check if level was completed successfully
     const levelCompleted = matches === gameConfig?.symbolCount;
-    console.log('Game ending - Level completed:', levelCompleted, 'Matches:', matches, 'Required:', gameConfig?.symbolCount);
     
     // End analytics session
     const session = analytics.endSession(levelCompleted, timeLeft);
@@ -171,27 +194,25 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
       // Update bandit with performance data
       const { performance, reward } = analytics.updateBandit(context, gameConfig, session);
       
-      console.log('Performance data:', performance);
-      console.log('Reward:', reward);
+      console.log('[Game] Performance:', {
+        completed: performance.completed,
+        accuracy: performance.accuracy.toFixed(2),
+        reward: reward.toFixed(1)
+      });
       
-      // Simplified level progression - advance if completed successfully
+      // Progress to next level if completed
       if (levelCompleted && currentLevel < 25) {
-        console.log('Advancing to next level');
         const newLevel = currentLevel + 1;
         setCurrentLevel(newLevel);
         localStorage.setItem('memoryGameLevel', newLevel.toString());
         setLevelProgress(Math.min(100, (newLevel / 25) * 100));
       }
-    } else {
-      // Fallback progression if analytics fail
-      console.log('Analytics unavailable, using fallback progression');
-      if (levelCompleted && currentLevel < 25) {
-        console.log('Fallback: Advancing to next level');
-        const newLevel = currentLevel + 1;
-        setCurrentLevel(newLevel);
-        localStorage.setItem('memoryGameLevel', newLevel.toString());
-        setLevelProgress(Math.min(100, (newLevel / 25) * 100));
-      }
+    } else if (levelCompleted && currentLevel < 25) {
+      // Fallback progression
+      const newLevel = currentLevel + 1;
+      setCurrentLevel(newLevel);
+      localStorage.setItem('memoryGameLevel', newLevel.toString());
+      setLevelProgress(Math.min(100, (newLevel / 25) * 100));
     }
 
     // Calculate score
@@ -201,7 +222,6 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     const levelBonus = currentLevel * 5;
     const score = Math.min(100, timeBonus + moveEfficiency + matchBonus + levelBonus);
     
-    console.log('Final score:', score);
     setTimeout(() => onComplete(score), 1000);
   };
 
@@ -245,12 +265,15 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     return 'Expert';
   };
 
+  const banditStats = analytics.getBanditStats();
+
   if (!gameConfig) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center">
         <div className="text-center">
           <Brain className="h-12 w-12 mx-auto animate-pulse text-primary mb-4" />
-          <p className="text-muted-foreground">AI is optimizing your game...</p>
+          <p className="text-muted-foreground">AI is analyzing your playstyle...</p>
+          <p className="text-xs text-muted-foreground mt-2">Epsilon-Greedy Bandit Optimization</p>
         </div>
       </div>
     );
@@ -283,6 +306,20 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
                 <span className="text-sm font-medium">Streak: {streak}</span>
               </div>
             )}
+            
+            {/* AI Insights */}
+            <div className="bg-primary/10 rounded-lg p-3 mb-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">AI Adaptation</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <div>Skill Level: {Math.round(banditStats.skillLevel * 100)}%</div>
+                <div>Exploration: {Math.round(banditStats.epsilon * 100)}%</div>
+                <div>Games Analyzed: {banditStats.totalPulls}</div>
+                <div>Playstyle: {context?.userType?.replace('_', ' ')}</div>
+              </div>
+            </div>
             
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -327,7 +364,7 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
             <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Memory Matching</h1>
-                <p className="text-muted-foreground">Level {currentLevel} • AI Adaptive Training</p>
+                <p className="text-muted-foreground">Level {currentLevel} • ε-Greedy Adaptive AI</p>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="secondary" className={getDifficultyColor()}>
@@ -336,6 +373,18 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
                 <Badge variant="outline">
                   {context?.userType?.replace('_', ' ').toUpperCase()}
                 </Badge>
+                {gameConfig.hintEnabled && (
+                  <Badge variant="outline" className="text-primary">
+                    <Sparkles className="h-3 w-3 mr-1" />
+                    Hints
+                  </Badge>
+                )}
+                {gameConfig.adaptiveTimer && (
+                  <Badge variant="outline" className="text-green-500">
+                    <TrendingUp className="h-3 w-3 mr-1" />
+                    Adaptive
+                  </Badge>
+                )}
               </div>
             </div>
             <Button onClick={onExit} variant="outline">
@@ -350,6 +399,21 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
               <span>{currentLevel}/25</span>
             </div>
             <Progress value={(currentLevel / 25) * 100} className="h-2" />
+          </div>
+          
+          {/* Bandit Stats */}
+          <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+            <span>AI Exploration: {Math.round(banditStats.epsilon * 100)}%</span>
+            <span>•</span>
+            <span>Skill: {Math.round(banditStats.skillLevel * 100)}%</span>
+            <span>•</span>
+            <span>Games: {banditStats.totalPulls}</span>
+            {adaptiveTimeBonus > 0 && (
+              <>
+                <span>•</span>
+                <span className="text-green-500">+{adaptiveTimeBonus}s bonus</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -430,6 +494,11 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
               <p className="text-lg text-muted-foreground">Click any card to start Level {currentLevel}!</p>
               <p className="text-sm text-muted-foreground mt-2">
                 AI has optimized this level for your {context?.userType?.replace('_', ' ')} playstyle
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Difficulty: {gameConfig.difficultyMultiplier.toFixed(2)}x • 
+                Grid: {gameConfig.gridSize}x{gameConfig.gridSize} • 
+                Time: {gameConfig.timeLimit}s
               </p>
             </div>
           )}
