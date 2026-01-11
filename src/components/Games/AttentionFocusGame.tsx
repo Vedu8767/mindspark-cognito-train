@@ -3,13 +3,32 @@ import { RotateCcw, Home, Trophy, Target, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { attentionBandit, AttentionContext, AttentionAction } from '@/lib/bandit';
 
+type TargetColor = 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'yellow' | 'pink';
+
 interface GameTarget {
   id: number;
   x: number;
   y: number;
   type: 'target' | 'distractor';
   size: number;
+  color: TargetColor;
 }
+
+const TARGET_COLOR: TargetColor = 'blue';
+const DISTRACTOR_COLORS: TargetColor[] = ['red', 'orange', 'yellow', 'green', 'purple', 'pink'];
+
+const getColorClasses = (color: TargetColor): string => {
+  const colorMap: Record<TargetColor, string> = {
+    blue: 'from-blue-500 to-blue-600 shadow-blue-500/50',
+    red: 'from-red-500 to-red-600 shadow-red-500/50',
+    orange: 'from-orange-500 to-orange-600 shadow-orange-500/50',
+    yellow: 'from-yellow-400 to-yellow-500 shadow-yellow-500/50',
+    green: 'from-green-500 to-green-600 shadow-green-500/50',
+    purple: 'from-purple-500 to-purple-600 shadow-purple-500/50',
+    pink: 'from-pink-500 to-pink-600 shadow-pink-500/50',
+  };
+  return colorMap[color];
+};
 
 interface AttentionFocusGameProps {
   onComplete: (score: number) => void;
@@ -32,6 +51,8 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
   // Bandit-controlled game config
   const [gameConfig, setGameConfig] = useState<AttentionAction | null>(null);
   const [banditStats, setBanditStats] = useState(attentionBandit.getStats());
+  const [nextLevelPrediction, setNextLevelPrediction] = useState<'easier' | 'same' | 'harder'>('same');
+  const [performanceInsight, setPerformanceInsight] = useState<string>("Let's see how you perform!");
   
   // Session tracking
   const sessionStartRef = useRef(Date.now());
@@ -128,12 +149,16 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
     const isTarget = Math.random() < 0.4;
     const sizeVariation = gameConfig.targetSize + (Math.random() - 0.5) * 10;
     
+    // Pick a random distractor color for variety
+    const distractorColor = DISTRACTOR_COLORS[Math.floor(Math.random() * DISTRACTOR_COLORS.length)];
+    
     const newTarget: GameTarget = {
       id: Date.now() + Math.random(),
       x: Math.random() * (window.innerWidth - 200) + 100,
       y: Math.random() * (window.innerHeight - 300) + 150,
       type: isTarget ? 'target' : 'distractor',
       size: sizeVariation,
+      color: isTarget ? TARGET_COLOR : distractorColor,
     };
 
     setTargets(prev => [...prev, newTarget]);
@@ -217,8 +242,14 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
     
     console.log(`[AttentionGame] Level ${currentLevel} complete. Reward: ${reward.toFixed(1)}`);
     
-    // Determine next level using bandit
+    // Determine next level using bandit (no skipping)
     const optimalLevel = attentionBandit.getOptimalLevel(context);
+    const prediction = attentionBandit.predictNextLevelDifficulty(context);
+    const insight = attentionBandit.getPerformanceInsight(context);
+    
+    setNextLevelPrediction(prediction);
+    setPerformanceInsight(insight);
+    setBanditStats(attentionBandit.getStats());
     
     setTimeout(() => {
       if (currentLevel < 25) {
@@ -226,7 +257,7 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
       } else {
         endGame();
       }
-    }, 2000);
+    }, 2500);
   };
 
   const endGame = () => {
@@ -285,6 +316,18 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
   }
 
   if (levelComplete) {
+    const getDifficultyColor = () => {
+      if (nextLevelPrediction === 'harder') return 'text-orange-500';
+      if (nextLevelPrediction === 'easier') return 'text-green-500';
+      return 'text-blue-500';
+    };
+    
+    const getDifficultyIcon = () => {
+      if (nextLevelPrediction === 'harder') return '🔥';
+      if (nextLevelPrediction === 'easier') return '💪';
+      return '➡️';
+    };
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
         <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
@@ -293,10 +336,13 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
           </div>
           <div>
             <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            <p className="text-muted-foreground">
-              AI is adapting to your playstyle...
-            </p>
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            
+            {/* Performance Insight */}
+            <div className="bg-primary/10 p-3 rounded-lg mb-4">
+              <p className="text-sm font-medium text-foreground">{performanceInsight}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-success/10 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">Hits</p>
                 <p className="text-xl font-bold text-success">{hits}</p>
@@ -306,9 +352,23 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
                 <p className="text-xl font-bold text-primary">{score}</p>
               </div>
             </div>
-            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Brain className="h-3 w-3" />
-              <span>Exploration: {(banditStats.epsilon * 100).toFixed(0)}%</span>
+            
+            {/* Next Level Prediction */}
+            <div className="mt-4 p-3 bg-muted/30 rounded-lg">
+              <p className="text-xs text-muted-foreground mb-1">Next Level Prediction</p>
+              <p className={`text-lg font-bold ${getDifficultyColor()}`}>
+                {getDifficultyIcon()} {nextLevelPrediction === 'harder' ? 'Challenge Incoming!' : nextLevelPrediction === 'easier' ? 'Easier Level' : 'Balanced Difficulty'}
+              </p>
+            </div>
+            
+            <div className="mt-3 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <Brain className="h-3 w-3" />
+                <span>Skill: {(banditStats.skillLevel * 100).toFixed(0)}%</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span>Explore: {(banditStats.epsilon * 100).toFixed(0)}%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -368,11 +428,7 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
           <button
             key={target.id}
             onClick={() => handleTargetClick(target)}
-            className={`absolute rounded-full transition-all duration-200 hover:scale-110 focus-ring animate-pulse ${
-              target.type === 'target'
-                ? 'bg-gradient-to-br from-blue-500 to-blue-600 shadow-blue-500/50'
-                : 'bg-gradient-to-br from-red-500 to-red-600 shadow-red-500/50'
-            } shadow-lg`}
+            className={`absolute rounded-full transition-all duration-200 hover:scale-110 focus-ring animate-pulse bg-gradient-to-br ${getColorClasses(target.color)} shadow-lg`}
             style={{
               left: target.x,
               top: target.y,
@@ -393,8 +449,8 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
             <div>
               <h2 className="text-2xl font-bold text-foreground mb-4">Attention Focus</h2>
               <div className="text-left space-y-2 mb-6">
-                <p className="text-sm text-muted-foreground">🎯 Tap blue targets (+10 points)</p>
-                <p className="text-sm text-muted-foreground">❌ Avoid red distractors (-5 points)</p>
+                <p className="text-sm text-muted-foreground">🔵 Tap ONLY blue targets (+10 points)</p>
+                <p className="text-sm text-muted-foreground">🚫 Avoid ALL colored distractors (-5 points)</p>
                 <p className="text-sm text-muted-foreground">⚡ Build combos for bonus points</p>
                 <p className="text-sm text-muted-foreground">🧠 AI adapts difficulty to your skill</p>
               </div>
