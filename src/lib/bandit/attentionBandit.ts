@@ -359,19 +359,50 @@ export class AttentionBandit {
   
   getOptimalLevel(context: AttentionContext): number {
     const recentRewards = this.history.slice(-5).map(h => h.reward);
-    if (recentRewards.length === 0) return context.currentLevel;
+    if (recentRewards.length === 0) return Math.min(context.currentLevel + 1, 25);
     
     const avgReward = recentRewards.reduce((a, b) => a + b, 0) / recentRewards.length;
     
-    if (avgReward > 70 && this.userProfile.skillLevel > 0.7) {
-      return Math.min(context.currentLevel + 2, 25);
-    } else if (avgReward > 55) {
+    // Never skip levels - always go +1 or -1 or stay
+    if (avgReward > 60) {
       return Math.min(context.currentLevel + 1, 25);
-    } else if (avgReward < 20) {
+    } else if (avgReward < 25) {
       return Math.max(context.currentLevel - 1, 1);
     }
     
-    return context.currentLevel;
+    return Math.min(context.currentLevel + 1, 25);
+  }
+  
+  predictNextLevelDifficulty(context: AttentionContext): 'easier' | 'same' | 'harder' {
+    const recentRewards = this.history.slice(-5).map(h => h.reward);
+    if (recentRewards.length === 0) return 'same';
+    
+    const avgReward = recentRewards.reduce((a, b) => a + b, 0) / recentRewards.length;
+    
+    if (avgReward > 70) return 'harder';
+    if (avgReward < 30) return 'easier';
+    return 'same';
+  }
+  
+  getPerformanceInsight(context: AttentionContext): string {
+    const recentRewards = this.history.slice(-3).map(h => h.reward);
+    if (recentRewards.length === 0) return "Let's see how you perform!";
+    
+    const avgReward = recentRewards.reduce((a, b) => a + b, 0) / recentRewards.length;
+    const accuracy = context.recentAccuracy;
+    const speed = context.avgReactionTime;
+    
+    if (avgReward > 75) {
+      return "🔥 Excellent! You're crushing it - expect a challenge!";
+    } else if (avgReward > 55) {
+      return "👍 Great performance! Difficulty staying balanced.";
+    } else if (avgReward > 35) {
+      if (accuracy < 0.6) return "🎯 Focus on accuracy - take your time!";
+      if (speed > 600) return "⚡ Try to react faster to targets!";
+      return "📈 Good effort! Keep practicing.";
+    } else {
+      return "💪 Taking it easier next round to help you improve.";
+    }
   }
   
   getStats() {
