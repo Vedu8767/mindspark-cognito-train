@@ -308,6 +308,23 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
   }
 
   if (levelComplete) {
+    const context = buildContext();
+    const nextLevelPrediction = reactionBandit.predictNextLevelDifficulty(context);
+    const performanceInsight = reactionBandit.getPerformanceInsight(context);
+    
+    const getPredictionStyles = () => {
+      switch (nextLevelPrediction) {
+        case 'harder':
+          return { bg: 'bg-success/20', text: 'text-success', icon: '🚀', label: 'Harder' };
+        case 'easier':
+          return { bg: 'bg-warning/20', text: 'text-warning', icon: '🛡️', label: 'Easier' };
+        default:
+          return { bg: 'bg-primary/20', text: 'text-primary', icon: '⚡', label: 'Same Level' };
+      }
+    };
+    
+    const predictionStyles = getPredictionStyles();
+    
     return (
       <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
         <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
@@ -316,10 +333,22 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
           </div>
           <div>
             <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            <p className="text-muted-foreground">
-              AI is adapting to your reaction patterns...
+            <p className="text-muted-foreground mb-4">
+              {performanceInsight}
             </p>
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            
+            {/* Next Level Prediction */}
+            <div className={`${predictionStyles.bg} p-4 rounded-lg mb-4`}>
+              <div className="flex items-center justify-center gap-2">
+                <span className="text-2xl">{predictionStyles.icon}</span>
+                <div>
+                  <p className="text-sm text-muted-foreground">Next Level Will Be</p>
+                  <p className={`text-lg font-bold ${predictionStyles.text}`}>{predictionStyles.label}</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-primary/10 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">Avg Time</p>
                 <p className="text-xl font-bold text-primary">{Math.round(avgReactionTime)}ms</p>
@@ -331,7 +360,7 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
             </div>
             <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <Brain className="h-3 w-3" />
-              <span>Exploration: {(banditStats.epsilon * 100).toFixed(0)}%</span>
+              <span>Skill Level: {(banditStats.skillLevel * 100).toFixed(0)}% | Exploration: {(banditStats.epsilon * 100).toFixed(0)}%</span>
             </div>
           </div>
         </div>
@@ -424,7 +453,12 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
                     <h3 className="text-xl font-semibold text-foreground">Get Ready...</h3>
                     <div 
                       onClick={handleClick}
-                      className="w-48 h-48 mx-auto rounded-full bg-gradient-to-br from-red-500 to-red-600 shadow-lg cursor-pointer transition-all duration-200 hover:scale-105 flex items-center justify-center"
+                      className="w-48 h-48 mx-auto rounded-full shadow-lg cursor-pointer transition-all duration-200 hover:scale-105 flex items-center justify-center"
+                      style={{
+                        background: `linear-gradient(135deg, 
+                          hsl(${(currentLevel * 15) % 360}, 70%, 50%), 
+                          hsl(${(currentLevel * 15 + 30) % 360}, 80%, 40%))`
+                      }}
                     >
                       <span className="text-white font-bold text-lg">Wait...</span>
                     </div>
@@ -439,9 +473,9 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
                     <h3 className="text-xl font-semibold text-success">CLICK NOW!</h3>
                     <div 
                       onClick={handleClick}
-                      className="w-48 h-48 mx-auto rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg cursor-pointer transition-all duration-200 hover:scale-105 animate-pulse flex items-center justify-center"
+                      className="w-48 h-48 mx-auto rounded-full bg-gradient-to-br from-green-500 to-emerald-400 shadow-lg shadow-green-500/50 cursor-pointer transition-all duration-200 hover:scale-105 animate-pulse flex items-center justify-center ring-4 ring-green-400/50"
                     >
-                      <span className="text-white font-bold text-lg">CLICK!</span>
+                      <span className="text-white font-bold text-xl drop-shadow-lg">CLICK!</span>
                     </div>
                     <p className="text-success font-semibold">Click as fast as you can!</p>
                   </>
