@@ -367,15 +367,54 @@ export class ReactionBandit {
     
     const avgReward = recentRewards.reduce((a, b) => a + b, 0) / recentRewards.length;
     
-    if (avgReward > 70 && this.userProfile.skillLevel > 0.7) {
-      return Math.min(context.currentLevel + 2, 25);
-    } else if (avgReward > 55) {
+    // Strict progression: only move +1, -1, or stay (no level skipping)
+    if (avgReward > 55 && this.userProfile.skillLevel > 0.5) {
       return Math.min(context.currentLevel + 1, 25);
-    } else if (avgReward < 20) {
+    } else if (avgReward < 25) {
       return Math.max(context.currentLevel - 1, 1);
     }
     
     return context.currentLevel;
+  }
+  
+  predictNextLevelDifficulty(context: ReactionContext): 'easier' | 'same' | 'harder' {
+    const recentRewards = this.history.slice(-5).map(h => h.reward);
+    if (recentRewards.length === 0) return 'same';
+    
+    const avgReward = recentRewards.reduce((a, b) => a + b, 0) / recentRewards.length;
+    
+    if (avgReward > 55 && this.userProfile.skillLevel > 0.5) {
+      return 'harder';
+    } else if (avgReward < 25) {
+      return 'easier';
+    }
+    return 'same';
+  }
+  
+  getPerformanceInsight(context: ReactionContext): string {
+    const recentRewards = this.history.slice(-3).map(h => h.reward);
+    if (recentRewards.length === 0) return "Starting to learn your reaction patterns...";
+    
+    const avgReward = recentRewards.reduce((a, b) => a + b, 0) / recentRewards.length;
+    const avgRT = context.avgReactionTime;
+    const earlyRate = context.earlyClickRate;
+    
+    if (avgReward > 75) {
+      if (avgRT < 350) return "Lightning fast reflexes! Increasing the challenge.";
+      return "Outstanding performance! Moving to harder trials.";
+    } else if (avgReward > 55) {
+      if (context.consistencyScore > 0.8) return "Great consistency! Ramping up difficulty.";
+      return "Solid reactions! Progressing to the next level.";
+    } else if (avgReward > 35) {
+      if (earlyRate > 0.2) return "Try to be patient - wait for the green signal.";
+      return "Good effort! Maintaining current difficulty.";
+    } else if (avgReward > 20) {
+      if (earlyRate > 0.3) return "Too many early clicks. Focus on timing!";
+      return "Taking it steady - adjusting for better practice.";
+    } else {
+      if (earlyRate > 0.4) return "Patience is key! Wait for the green circle.";
+      return "Easing up to help build your reaction skills.";
+    }
   }
   
   getStats() {
