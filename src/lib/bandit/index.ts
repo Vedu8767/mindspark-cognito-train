@@ -2,6 +2,7 @@
 // This module implements a reinforcement learning approach to personalize game difficulty
 
 export * from './types';
+export * from './patternBandit';
 export * from './actionSpace';
 export * from './featureExtractor';
 export { EpsilonGreedyBandit, memoryGameBandit } from './epsilonGreedy';

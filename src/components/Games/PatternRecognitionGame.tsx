@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
-import { RotateCcw, Home, Trophy, Puzzle } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { RotateCcw, Home, Trophy, Puzzle, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { patternRecognitionBandit, PatternContext, PatternAction } from '@/lib/bandit/patternBandit';
+import { PerformanceMetrics } from '@/lib/bandit/types';
 
 interface Pattern {
   sequence: string[];
   options: string[];
   answer: string;
+  type: 'number' | 'shape' | 'letter';
 }
 
 interface PatternRecognitionGameProps {
@@ -15,18 +18,10 @@ interface PatternRecognitionGameProps {
 
 const SHAPES = ['🔴', '🟡', '🟢', '🔵', '🟣', '🟠', '⚫', '⚪', '🔺', '🔸', '⭐', '❤️'];
 const NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-
-const LEVELS = [
-  { level: 1, patterns: 5, sequenceLength: 3, patternTypes: ['number'], timeLimit: 45 },
-  { level: 2, patterns: 6, sequenceLength: 4, patternTypes: ['number', 'shape'], timeLimit: 50 },
-  { level: 3, patterns: 7, sequenceLength: 4, patternTypes: ['number', 'shape', 'letter'], timeLimit: 55 },
-  { level: 4, patterns: 8, sequenceLength: 5, patternTypes: ['number', 'shape', 'letter'], timeLimit: 60 },
-  { level: 5, patterns: 10, sequenceLength: 6, patternTypes: ['number', 'shape', 'letter'], timeLimit: 65 },
-];
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 
 const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(0);
+  const [currentLevel, setCurrentLevel] = useState(patternRecognitionBandit.getLevel());
   const [currentPattern, setCurrentPattern] = useState(0);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string>('');
@@ -35,25 +30,46 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
   const [timeLeft, setTimeLeft] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameComplete, setGameComplete] = useState(false);
+  const [levelComplete, setLevelComplete] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [lastCorrect, setLastCorrect] = useState<boolean | null>(null);
+  
+  // Bandit state
+  const [currentAction, setCurrentAction] = useState<PatternAction | null>(null);
+  const [levelStartTime, setLevelStartTime] = useState(0);
+  const [patternTimes, setPatternTimes] = useState<number[]>([]);
+  const [patternStartTime, setPatternStartTime] = useState(0);
+  const [banditStats, setBanditStats] = useState(patternRecognitionBandit.getStats());
+  const [nextLevelPrediction, setNextLevelPrediction] = useState<'easier' | 'same' | 'harder'>('same');
+  const [performanceInsight, setPerformanceInsight] = useState<string>('');
 
-  const level = LEVELS[currentLevel];
+  const getContext = useCallback((): PatternContext => {
+    const avgTime = patternTimes.length > 0 
+      ? patternTimes.reduce((a, b) => a + b, 0) / patternTimes.length 
+      : 3000;
+    
+    return {
+      currentLevel,
+      recentAccuracy: patterns.length > 0 ? correctAnswers / Math.max(1, currentPattern) : 0.5,
+      recentSpeed: avgTime < 2000 ? 1 : avgTime < 4000 ? 0.7 : 0.4,
+      sessionLength: (Date.now() - levelStartTime) / 1000,
+      timeOfDay: new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening',
+      previousDifficulty: currentAction?.difficultyMultiplier || 1,
+      streakCount: correctAnswers,
+      userType: 'balanced',
+      avgMoveTime: avgTime,
+      frustrationLevel: correctAnswers < currentPattern * 0.3 ? 0.7 : 0.2,
+      engagementLevel: 0.8,
+      preferredGridSize: 4,
+      successRate: correctAnswers / Math.max(1, currentPattern),
+      dayOfWeek: new Date().getDay(),
+      avgPatternTime: avgTime,
+      patternTypePreference: 'mixed',
+      sequenceRecognitionSpeed: avgTime < 2000 ? 1 : 0.5
+    };
+  }, [currentLevel, correctAnswers, currentPattern, patternTimes, levelStartTime, currentAction, patterns.length]);
 
-  useEffect(() => {
-    generatePatterns();
-  }, [currentLevel]);
-
-  useEffect(() => {
-    if (gameStarted && timeLeft > 0 && !gameComplete) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !gameComplete) {
-      endGame();
-    }
-  }, [timeLeft, gameStarted, gameComplete]);
-
-  const generateArithmeticPattern = (items: string[], length: number): Pattern => {
+  const generateArithmeticPattern = (length: number): Pattern => {
     const start = Math.floor(Math.random() * 5) + 1;
     const diff = Math.floor(Math.random() * 3) + 1;
     const sequence: string[] = [];
@@ -67,81 +83,90 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
       (parseInt(answer) + 1).toString(),
       (parseInt(answer) - 1).toString(),
       (parseInt(answer) + diff + 1).toString(),
+      (parseInt(answer) - diff).toString(),
+      (parseInt(answer) + 2).toString(),
     ];
     
-    const options = [...new Set([answer, ...wrongOptions])].slice(0, 4);
-    return { sequence, options: shuffleArray(options), answer };
+    const optionCount = currentAction?.optionCount || 4;
+    const options = [...new Set([answer, ...wrongOptions])].slice(0, optionCount);
+    return { sequence, options: shuffleArray(options), answer, type: 'number' };
   };
 
-  const generateShapePattern = (items: string[], length: number): Pattern => {
+  const generateShapePattern = (length: number): Pattern => {
     const patternType = Math.random() < 0.5 ? 'repeat' : 'sequence';
     const sequence: string[] = [];
     
     if (patternType === 'repeat') {
       const patternLength = Math.min(3, Math.floor(length / 2));
-      const basePattern = shuffleArray(items).slice(0, patternLength);
+      const basePattern = shuffleArray(SHAPES).slice(0, patternLength);
       
       for (let i = 0; i < length; i++) {
         sequence.push(basePattern[i % patternLength]);
       }
       
       const answer = basePattern[length % patternLength];
-      const wrongOptions = shuffleArray(items.filter(item => item !== answer)).slice(0, 3);
+      const optionCount = currentAction?.optionCount || 4;
+      const wrongOptions = shuffleArray(SHAPES.filter(item => item !== answer)).slice(0, optionCount - 1);
       const options = [answer, ...wrongOptions];
       
-      return { sequence, options: shuffleArray(options), answer };
+      return { sequence, options: shuffleArray(options), answer, type: 'shape' };
     } else {
-      const shuffled = shuffleArray(items);
+      const shuffled = shuffleArray(SHAPES);
       for (let i = 0; i < length; i++) {
         sequence.push(shuffled[i % shuffled.length]);
       }
       
       const answer = shuffled[length % shuffled.length];
-      const wrongOptions = shuffleArray(items.filter(item => item !== answer)).slice(0, 3);
+      const optionCount = currentAction?.optionCount || 4;
+      const wrongOptions = shuffleArray(SHAPES.filter(item => item !== answer)).slice(0, optionCount - 1);
       const options = [answer, ...wrongOptions];
       
-      return { sequence, options: shuffleArray(options), answer };
+      return { sequence, options: shuffleArray(options), answer, type: 'shape' };
     }
   };
 
-  const generateLetterPattern = (items: string[], length: number): Pattern => {
+  const generateLetterPattern = (length: number): Pattern => {
     const start = Math.floor(Math.random() * 5);
     const step = Math.floor(Math.random() * 2) + 1;
     const sequence: string[] = [];
     
     for (let i = 0; i < length; i++) {
-      const index = (start + i * step) % items.length;
-      sequence.push(items[index]);
+      const index = (start + i * step) % LETTERS.length;
+      sequence.push(LETTERS[index]);
     }
     
-    const answerIndex = (start + length * step) % items.length;
-    const answer = items[answerIndex];
+    const answerIndex = (start + length * step) % LETTERS.length;
+    const answer = LETTERS[answerIndex];
     
-    const wrongOptions = items.filter(item => item !== answer).slice(0, 3);
+    const optionCount = currentAction?.optionCount || 4;
+    const wrongOptions = LETTERS.filter(item => item !== answer).slice(0, optionCount - 1);
     const options = [answer, ...wrongOptions];
     
-    return { sequence, options: shuffleArray(options), answer };
+    return { sequence, options: shuffleArray(options), answer, type: 'letter' };
   };
 
-  const generatePatterns = () => {
-    const newPatterns: Pattern[] = [];
+  const generatePatterns = useCallback(() => {
+    if (!currentAction) return;
     
-    for (let i = 0; i < level.patterns; i++) {
-      const patternType = level.patternTypes[Math.floor(Math.random() * level.patternTypes.length)];
+    const newPatterns: Pattern[] = [];
+    const patternTypes = currentAction.patternTypes;
+    
+    for (let i = 0; i < currentAction.patternCount; i++) {
+      const patternType = patternTypes[Math.floor(Math.random() * patternTypes.length)];
       let pattern: Pattern;
       
       switch (patternType) {
         case 'number':
-          pattern = generateArithmeticPattern(NUMBERS, level.sequenceLength);
+          pattern = generateArithmeticPattern(currentAction.sequenceLength);
           break;
         case 'shape':
-          pattern = generateShapePattern(SHAPES, level.sequenceLength);
+          pattern = generateShapePattern(currentAction.sequenceLength);
           break;
         case 'letter':
-          pattern = generateLetterPattern(LETTERS, level.sequenceLength);
+          pattern = generateLetterPattern(currentAction.sequenceLength);
           break;
         default:
-          pattern = generateArithmeticPattern(NUMBERS, level.sequenceLength);
+          pattern = generateArithmeticPattern(currentAction.sequenceLength);
       }
       
       newPatterns.push(pattern);
@@ -149,9 +174,25 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     
     setPatterns(newPatterns);
     setCurrentPattern(0);
-    setTimeLeft(level.timeLimit);
+    setTimeLeft(currentAction.timeLimit);
     setCorrectAnswers(0);
-  };
+    setPatternTimes([]);
+  }, [currentAction]);
+
+  useEffect(() => {
+    if (currentAction) {
+      generatePatterns();
+    }
+  }, [currentAction, generatePatterns]);
+
+  useEffect(() => {
+    if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
+      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+      return () => clearTimeout(timer);
+    } else if (timeLeft === 0 && gameStarted && !gameComplete && !levelComplete) {
+      handleLevelComplete();
+    }
+  }, [timeLeft, gameStarted, gameComplete, levelComplete]);
 
   const shuffleArray = <T,>(array: T[]): T[] => {
     const shuffled = [...array];
@@ -163,13 +204,20 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
   };
 
   const handleAnswerSelect = (answer: string) => {
+    if (showResult) return;
+    
+    const responseTime = Date.now() - patternStartTime;
+    setPatternTimes(prev => [...prev, responseTime]);
+    
     setSelectedAnswer(answer);
     const isCorrect = answer === patterns[currentPattern].answer;
     setLastCorrect(isCorrect);
     
     if (isCorrect) {
-      const points = Math.floor(100 / level.patterns);
-      setScore(prev => prev + points);
+      const basePoints = 100;
+      const timeBonus = Math.floor((timeLeft / (currentAction?.timeLimit || 60)) * 50);
+      const levelBonus = currentLevel * 10;
+      setScore(prev => prev + basePoints + timeBonus + levelBonus);
       setCorrectAnswers(prev => prev + 1);
     }
     
@@ -180,41 +228,164 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
       setSelectedAnswer('');
       setLastCorrect(null);
       
-      if (currentPattern + 1 >= level.patterns) {
-        completeLevel();
+      if (currentPattern + 1 >= patterns.length) {
+        handleLevelComplete();
       } else {
         setCurrentPattern(prev => prev + 1);
+        setPatternStartTime(Date.now());
       }
     }, 1500);
   };
 
-  const completeLevel = () => {
-    if (currentLevel < LEVELS.length - 1) {
-      setTimeout(() => {
-        setCurrentLevel(prev => prev + 1);
-      }, 2000);
-    } else {
-      endGame();
+  const handleLevelComplete = () => {
+    const context = getContext();
+    const totalPatterns = patterns.length;
+    const accuracy = correctAnswers / Math.max(1, totalPatterns);
+    const avgTime = patternTimes.length > 0 
+      ? patternTimes.reduce((a, b) => a + b, 0) / patternTimes.length 
+      : 5000;
+    
+    const metrics: PerformanceMetrics = {
+      completed: true,
+      accuracy,
+      timeEfficiency: Math.max(0, 1 - avgTime / 10000),
+      engagement: 0.8,
+      frustration: accuracy < 0.5 ? 0.6 : 0.2,
+      optimalMoves: totalPatterns,
+      actualMoves: currentPattern + 1,
+      avgReactionTime: avgTime
+    };
+    
+    const reward = patternRecognitionBandit.calculateReward(metrics);
+    
+    if (currentAction) {
+      patternRecognitionBandit.updateModel(context, currentAction, reward, metrics);
     }
+    
+    // Get predictions for next level
+    const prediction = patternRecognitionBandit.predictNextLevelDifficulty(metrics);
+    const insight = patternRecognitionBandit.getPerformanceInsight(metrics);
+    setNextLevelPrediction(prediction);
+    setPerformanceInsight(insight);
+    
+    // Calculate next level (strict ±1 progression)
+    const nextLevel = patternRecognitionBandit.getOptimalLevel(context);
+    
+    setLevelComplete(true);
+    setBanditStats(patternRecognitionBandit.getStats());
+    
+    // Store next level for progression
+    patternRecognitionBandit.setLevel(nextLevel);
+  };
+
+  const proceedToNextLevel = () => {
+    const nextLevel = patternRecognitionBandit.getLevel();
+    setCurrentLevel(nextLevel);
+    setLevelComplete(false);
+    
+    // Get new action from bandit
+    const context = getContext();
+    const action = patternRecognitionBandit.selectAction(context);
+    setCurrentAction(action);
+    setLevelStartTime(Date.now());
+    setPatternStartTime(Date.now());
   };
 
   const endGame = () => {
     setGameComplete(true);
-    const finalScore = Math.min(100, Math.floor((score / (LEVELS.length * 100)) * 100));
+    const finalScore = score;
     setTimeout(() => onComplete(finalScore), 1000);
   };
 
   const startGame = () => {
+    const context = getContext();
+    const action = patternRecognitionBandit.selectAction(context);
+    setCurrentAction(action);
+    setLevelStartTime(Date.now());
+    setPatternStartTime(Date.now());
     setGameStarted(true);
   };
 
   const restartGame = () => {
-    setCurrentLevel(0);
+    patternRecognitionBandit.reset();
+    setCurrentLevel(1);
     setScore(0);
     setGameStarted(false);
     setGameComplete(false);
-    generatePatterns();
+    setLevelComplete(false);
+    setCurrentAction(null);
+    setBanditStats(patternRecognitionBandit.getStats());
   };
+
+  // Level Complete Screen
+  if (levelComplete && !gameComplete) {
+    const accuracy = patterns.length > 0 ? (correctAnswers / patterns.length * 100).toFixed(0) : '0';
+    
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
+        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
+          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
+            <Trophy className="h-10 w-10 text-white" />
+          </div>
+          
+          <div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
+            <p className="text-muted-foreground">
+              {correctAnswers} of {patterns.length} patterns correct ({accuracy}%)
+            </p>
+          </div>
+          
+          {/* Performance Insight */}
+          <div className="bg-primary/10 p-4 rounded-lg">
+            <p className="text-sm text-foreground">{performanceInsight}</p>
+          </div>
+          
+          {/* Next Level Prediction */}
+          <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-muted/50">
+            {nextLevelPrediction === 'harder' && (
+              <>
+                <TrendingUp className="h-5 w-5 text-success" />
+                <span className="text-success font-medium">Next level will be harder</span>
+              </>
+            )}
+            {nextLevelPrediction === 'easier' && (
+              <>
+                <TrendingDown className="h-5 w-5 text-warning" />
+                <span className="text-warning font-medium">Next level will be easier</span>
+              </>
+            )}
+            {nextLevelPrediction === 'same' && (
+              <>
+                <Minus className="h-5 w-5 text-muted-foreground" />
+                <span className="text-muted-foreground font-medium">Same difficulty level</span>
+              </>
+            )}
+          </div>
+          
+          {/* AI Stats */}
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="bg-muted/30 p-2 rounded">
+              <p className="text-muted-foreground">AI Exploration</p>
+              <p className="font-semibold text-foreground">{(banditStats.epsilon * 100).toFixed(0)}%</p>
+            </div>
+            <div className="bg-muted/30 p-2 rounded">
+              <p className="text-muted-foreground">Skill Level</p>
+              <p className="font-semibold text-foreground">{banditStats.skillLevel.toFixed(1)}</p>
+            </div>
+          </div>
+          
+          <div className="space-y-3">
+            <Button onClick={proceedToNextLevel} className="w-full btn-primary">
+              Continue to Level {patternRecognitionBandit.getLevel()}
+            </Button>
+            <Button onClick={endGame} variant="outline" className="w-full">
+              End Game
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (gameComplete) {
     return (
@@ -226,7 +397,7 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
           <div>
             <h2 className="text-2xl font-bold text-foreground mb-2">Pattern Master!</h2>
             <p className="text-muted-foreground mb-4">
-              You completed all {LEVELS.length} levels with {correctAnswers} correct patterns!
+              You reached level {currentLevel} with {correctAnswers} correct patterns!
             </p>
             <div className="bg-primary/10 p-4 rounded-lg">
               <p className="text-lg font-bold text-primary">Final Score: {score}</p>
@@ -256,7 +427,13 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
         <div className="glass-card-strong p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Pattern Recognition - Level {currentLevel + 1}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-foreground">Pattern Recognition - Level {currentLevel}</h1>
+                <span className="px-2 py-1 bg-primary/20 text-primary text-xs font-medium rounded-full flex items-center gap-1">
+                  <Brain className="h-3 w-3" />
+                  AI Adaptive
+                </span>
+              </div>
               <p className="text-muted-foreground">Find the next item in the sequence!</p>
             </div>
             <Button onClick={onExit} variant="outline">
@@ -274,7 +451,7 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
           </div>
           <div className="glass-card p-4 text-center">
             <p className="text-sm text-muted-foreground">Pattern</p>
-            <p className="text-2xl font-bold text-foreground">{currentPattern + 1}/{level.patterns}</p>
+            <p className="text-2xl font-bold text-foreground">{currentPattern + 1}/{patterns.length || '?'}</p>
           </div>
           <div className="glass-card p-4 text-center">
             <p className="text-sm text-muted-foreground">Correct</p>
@@ -297,18 +474,19 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
                 <p className="text-sm text-muted-foreground">🧩 Find the next item in each sequence</p>
                 <p className="text-sm text-muted-foreground">🔢 Numbers, shapes, and letters</p>
                 <p className="text-sm text-muted-foreground">⏱️ Complete all patterns before time runs out</p>
-                <p className="text-sm text-muted-foreground">📈 {LEVELS.length} challenging levels</p>
+                <p className="text-sm text-muted-foreground">🤖 AI adapts difficulty to your skill level</p>
+                <p className="text-sm text-muted-foreground">📈 25 progressive levels</p>
               </div>
               <div className="bg-primary/10 p-4 rounded-lg">
-                <p className="text-sm font-semibold text-foreground">Level {currentLevel + 1}</p>
+                <p className="text-sm font-semibold text-foreground">Starting Level {currentLevel}</p>
                 <p className="text-xs text-muted-foreground">
-                  {level.patterns} patterns • {level.timeLimit} seconds
+                  AI will adjust based on your performance
                 </p>
               </div>
             </div>
             <Button onClick={startGame} className="btn-primary">
               <Puzzle className="h-4 w-4 mr-2" />
-              Start Level {currentLevel + 1}
+              Start Level {currentLevel}
             </Button>
           </div>
         ) : (
@@ -320,33 +498,33 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
                   <h3 className="text-lg font-semibold text-foreground mb-6">
                     What comes next in this sequence?
                   </h3>
-                  <div className="flex items-center justify-center space-x-4 mb-8">
+                  <div className="flex items-center justify-center flex-wrap gap-2 mb-8">
                     {currentPatternData.sequence.map((item, index) => (
                       <div key={index} className="flex items-center">
-                        <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-primary/30 rounded-lg flex items-center justify-center text-2xl font-bold">
+                        <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-primary/20 to-primary/30 rounded-lg flex items-center justify-center text-xl md:text-2xl font-bold">
                           {item}
                         </div>
                         {index < currentPatternData.sequence.length - 1 && (
-                          <span className="mx-2 text-muted-foreground">→</span>
+                          <span className="mx-1 md:mx-2 text-muted-foreground">→</span>
                         )}
                       </div>
                     ))}
-                    <span className="mx-2 text-muted-foreground">→</span>
-                    <div className="w-16 h-16 bg-gradient-to-br from-accent/20 to-accent/30 rounded-lg flex items-center justify-center text-2xl font-bold border-2 border-dashed border-accent">
+                    <span className="mx-1 md:mx-2 text-muted-foreground">→</span>
+                    <div className="w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-accent/20 to-accent/30 rounded-lg flex items-center justify-center text-xl md:text-2xl font-bold border-2 border-dashed border-accent">
                       ?
                     </div>
                   </div>
                 </div>
 
                 {/* Answer Options */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className={`grid gap-4 ${currentPatternData.options.length <= 4 ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3 md:grid-cols-6'}`}>
                   {currentPatternData.options.map((option, index) => (
                     <button
                       key={index}
                       onClick={() => handleAnswerSelect(option)}
                       disabled={showResult}
                       className={`
-                        w-full h-20 rounded-lg text-2xl font-bold transition-all duration-200 focus-ring
+                        w-full h-16 md:h-20 rounded-lg text-xl md:text-2xl font-bold transition-all duration-200 focus-ring
                         ${showResult && option === selectedAnswer
                           ? lastCorrect
                             ? 'bg-gradient-to-br from-success to-success-light text-white scale-105'
