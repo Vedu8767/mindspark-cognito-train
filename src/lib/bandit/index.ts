@@ -8,6 +8,8 @@ export * from './featureExtractor';
 export { EpsilonGreedyBandit, memoryGameBandit } from './epsilonGreedy';
 export { AttentionBandit, attentionBandit, type AttentionContext, type AttentionAction } from './attentionBandit';
 export { ReactionBandit, reactionBandit, type ReactionContext, type ReactionAction } from './reactionBandit';
+export { WordMemoryBandit, wordMemoryBandit, type WordMemoryContext, type WordMemoryAction } from './wordMemoryBandit';
+export { MathChallengeBandit, mathChallengeBandit, type MathContext, type MathAction } from './mathChallengeBandit';
 
 // Re-export main types with aliases for backward compatibility
 export type { UserContext as Context, GameAction as GameConfig } from './types';
