@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RotateCcw, Home, Trophy, Eye, Clock } from 'lucide-react';
+import { RotateCcw, Home, Trophy, Eye, Clock, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { visualProcessingBandit, type VisualContext, type VisualAction } from '@/lib/bandit/visualProcessingBandit';
 
 interface VisualProcessingGameProps {
   onComplete: (score: number) => void;
@@ -24,19 +25,11 @@ interface Trial {
   responseTime?: number;
 }
 
-const LEVELS = [
-  { level: 1, trials: 8, gridSize: 3, distractors: 5, timeLimit: 45 },
-  { level: 2, trials: 10, gridSize: 4, distractors: 8, timeLimit: 50 },
-  { level: 3, trials: 12, gridSize: 4, distractors: 12, timeLimit: 55 },
-  { level: 4, trials: 15, gridSize: 5, distractors: 16, timeLimit: 60 },
-  { level: 5, trials: 18, gridSize: 5, distractors: 20, timeLimit: 65 },
-];
-
 const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 const SHAPES = ['circle', 'square', 'triangle', 'diamond'] as const;
 
 const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(0);
+  const [currentLevel, setCurrentLevel] = useState(1);
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
   const [score, setScore] = useState(0);
@@ -47,50 +40,72 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
   const [levelComplete, setLevelComplete] = useState(false);
   const [showTarget, setShowTarget] = useState(true);
   const [trialStartTime, setTrialStartTime] = useState(0);
+  const [currentAction, setCurrentAction] = useState<VisualAction | null>(null);
+  const [responseTimes, setResponseTimes] = useState<number[]>([]);
+  const [levelStartTime, setLevelStartTime] = useState(0);
 
-  const level = LEVELS[currentLevel];
+  const getContext = useCallback((): VisualContext => {
+    const hour = new Date().getHours();
+    const timeOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+    const avgResponseTime = responseTimes.length > 0 
+      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
+      : 2000;
+    
+    return {
+      currentLevel,
+      recentAccuracy: trials.length > 0 ? correct / Math.max(1, currentTrial) : 0.5,
+      recentSpeed: Math.min(1, 2500 / Math.max(500, avgResponseTime)),
+      sessionLength: Math.floor((Date.now() - levelStartTime) / 60000),
+      timeOfDay,
+      streakCount: 0,
+      avgResponseTime,
+      shapeRecognitionSpeed: avgResponseTime,
+      colorAccuracy: correct / Math.max(1, currentTrial),
+      distractorResistance: 0.5,
+    };
+  }, [currentLevel, correct, currentTrial, responseTimes, trials.length, levelStartTime]);
 
   useEffect(() => {
-    if (currentLevel < LEVELS.length) {
-      generateTrials();
+    if (gameStarted && !levelComplete && !gameComplete) {
+      const context = getContext();
+      const action = visualProcessingBandit.selectAction(context);
+      setCurrentAction(action);
+      generateTrials(action);
     }
-  }, [currentLevel]);
+  }, [currentLevel, gameStarted]);
 
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !gameComplete) {
+    } else if (timeLeft === 0 && gameStarted && !gameComplete && !levelComplete && currentAction) {
       completeLevel();
     }
   }, [timeLeft, gameStarted, gameComplete, levelComplete]);
 
-  const generateShape = (): Shape => ({
+  const generateShape = (colorVariety: number = 6): Shape => ({
     id: Math.random(),
     type: SHAPES[Math.floor(Math.random() * SHAPES.length)],
-    color: COLORS[Math.floor(Math.random() * COLORS.length)],
+    color: COLORS[Math.floor(Math.random() * Math.min(colorVariety, COLORS.length))],
     size: 30 + Math.random() * 20,
     rotation: Math.random() * 360
   });
 
-  const generateTrial = (id: number): Trial => {
-    const targetShape = generateShape();
+  const generateTrial = (id: number, action: VisualAction): Trial => {
+    const targetShape = generateShape(action.colorVariety);
     const shapes: Shape[] = [targetShape];
     
-    // Add distractors
-    for (let i = 0; i < level.distractors; i++) {
-      let distractor = generateShape();
-      // Ensure distractors are different
+    for (let i = 0; i < action.distractors; i++) {
+      let distractor = generateShape(action.colorVariety);
       while (
         distractor.type === targetShape.type &&
         distractor.color === targetShape.color
       ) {
-        distractor = generateShape();
+        distractor = generateShape(action.colorVariety);
       }
       shapes.push(distractor);
     }
 
-    // Shuffle shapes
     for (let i = shapes.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [shapes[i], shapes[j]] = [shapes[j], shapes[i]];
@@ -99,16 +114,18 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
     return { id, targetShape, shapes };
   };
 
-  const generateTrials = () => {
-    const newTrials = Array.from({ length: level.trials }, (_, i) => 
-      generateTrial(i)
+  const generateTrials = (action: VisualAction) => {
+    const newTrials = Array.from({ length: action.trials }, (_, i) => 
+      generateTrial(i, action)
     );
     setTrials(newTrials);
     setCurrentTrial(0);
-    setTimeLeft(level.timeLimit);
+    setTimeLeft(action.timeLimit);
     setLevelComplete(false);
     setCorrect(0);
     setShowTarget(true);
+    setResponseTimes([]);
+    setLevelStartTime(Date.now());
   };
 
   const startTrial = () => {
@@ -117,9 +134,11 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
   };
 
   const handleShapeClick = (shapeIndex: number) => {
-    if (showTarget) return;
+    if (showTarget || !currentAction) return;
 
     const responseTime = Date.now() - trialStartTime;
+    setResponseTimes(prev => [...prev, responseTime]);
+    
     const trial = trials[currentTrial];
     const clickedShape = trial.shapes[shapeIndex];
     const isCorrect = 
@@ -141,13 +160,14 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
 
     if (isCorrect) {
       const timeBonus = Math.max(0, 15 - Math.floor(responseTime / 1000));
-      const points = 10 + timeBonus;
+      const levelBonus = Math.floor(currentLevel * 0.5);
+      const points = 10 + timeBonus + levelBonus;
       setScore(prev => prev + points);
       setCorrect(prev => prev + 1);
     }
 
     setTimeout(() => {
-      if (currentTrial + 1 >= level.trials) {
+      if (currentTrial + 1 >= currentAction.trials) {
         completeLevel();
       } else {
         setCurrentTrial(prev => prev + 1);
@@ -157,38 +177,58 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
   };
 
   const completeLevel = () => {
+    if (!currentAction) return;
+    
     setLevelComplete(true);
     
-    // Calculate level completion bonus
-    const accuracyBonus = Math.floor((correct / level.trials) * 50);
+    const context = getContext();
+    const avgResponseTime = responseTimes.length > 0 
+      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
+      : 2000;
+    
+    visualProcessingBandit.updateModel(context, currentAction, {
+      accuracy: correct / currentAction.trials,
+      avgResponseTime,
+      completed: true,
+      timeRemaining: timeLeft,
+    });
+    
+    const accuracyBonus = Math.floor((correct / currentAction.trials) * 50);
     const timeBonus = Math.floor(timeLeft * 2);
     setScore(prev => prev + accuracyBonus + timeBonus);
+  };
+
+  const proceedToNextLevel = () => {
+    const context = getContext();
+    const nextLevel = visualProcessingBandit.getOptimalLevel(context);
     
-    setTimeout(() => {
-      if (currentLevel < LEVELS.length - 1) {
-        setCurrentLevel(prev => prev + 1);
-      } else {
-        endGame();
-      }
-    }, 3000);
+    if (nextLevel > currentLevel && currentLevel >= 25) {
+      endGame();
+    } else {
+      setCurrentLevel(nextLevel);
+      setLevelComplete(false);
+    }
   };
 
   const endGame = () => {
     setGameComplete(true);
-    const finalScore = Math.min(100, Math.floor((score / 400) * 100));
+    const finalScore = Math.min(100, Math.floor((score / 500) * 100));
     setTimeout(() => onComplete(finalScore), 1000);
   };
 
   const startGame = () => {
     setGameStarted(true);
+    setLevelStartTime(Date.now());
     setTimeout(startTrial, 2000);
   };
 
   const restartGame = () => {
-    setCurrentLevel(0);
+    setCurrentLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);
+    setCurrentAction(null);
+    setResponseTimes([]);
   };
 
   const renderShape = (shape: Shape, index: number, isTarget = false) => {
@@ -255,6 +295,11 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
     }
   };
 
+  const banditStats = visualProcessingBandit.getStats();
+  const context = getContext();
+  const nextDifficulty = visualProcessingBandit.predictNextLevelDifficulty(context);
+  const insight = visualProcessingBandit.getPerformanceInsight(context);
+
   if (gameComplete) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
@@ -265,7 +310,7 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
           <div>
             <h2 className="text-2xl font-bold text-foreground mb-2">Visual Expert!</h2>
             <p className="text-muted-foreground mb-4">
-              You completed all {LEVELS.length} levels with {correct} correct identifications!
+              You reached level {currentLevel} with {correct} correct identifications!
             </p>
             <div className="bg-primary/10 p-4 rounded-lg">
               <p className="text-lg font-bold text-primary">Final Score: {score}</p>
@@ -286,7 +331,7 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
     );
   }
 
-  if (levelComplete) {
+  if (levelComplete && currentAction) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
         <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
@@ -294,21 +339,51 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
             <Eye className="h-10 w-10 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel + 1} Complete!</h2>
-            <p className="text-muted-foreground">
-              Excellent visual processing! Moving to the next challenge.
-            </p>
-            <div className="grid grid-cols-2 gap-4 mt-4">
+            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
+            
+            <div className="bg-muted/50 p-4 rounded-lg mb-4">
+              <p className="text-sm text-muted-foreground">{insight}</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-success/10 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">Correct</p>
-                <p className="text-xl font-bold text-success">{correct}/{level.trials}</p>
+                <p className="text-xl font-bold text-success">{correct}/{currentAction.trials}</p>
               </div>
               <div className="bg-primary/10 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">Score</p>
                 <p className="text-xl font-bold text-primary">{score}</p>
               </div>
             </div>
+            
+            <div className="mt-4 p-3 rounded-lg border border-border">
+              <p className="text-sm text-muted-foreground mb-2">Next Level Prediction</p>
+              <div className="flex items-center justify-center gap-2">
+                {nextDifficulty === 'harder' && (
+                  <>
+                    <TrendingUp className="h-5 w-5 text-success" />
+                    <span className="text-success font-medium">Moving Up!</span>
+                  </>
+                )}
+                {nextDifficulty === 'easier' && (
+                  <>
+                    <TrendingDown className="h-5 w-5 text-warning" />
+                    <span className="text-warning font-medium">Adjusting Down</span>
+                  </>
+                )}
+                {nextDifficulty === 'same' && (
+                  <>
+                    <Minus className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-muted-foreground font-medium">Same Level</span>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
+          
+          <Button onClick={proceedToNextLevel} className="w-full btn-primary">
+            Continue
+          </Button>
         </div>
       </div>
     );
@@ -321,7 +396,13 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
         <div className="glass-card-strong p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Visual Processing - Level {currentLevel + 1}</h1>
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-2xl font-bold text-foreground">Visual Processing - Level {currentLevel}</h1>
+                <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs rounded-full flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" />
+                  AI Adaptive
+                </span>
+              </div>
               <p className="text-muted-foreground">Find the shape that matches the target!</p>
             </div>
             <Button onClick={onExit} variant="outline">
@@ -332,7 +413,7 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
         </div>
 
         {/* Game Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-5 gap-4 mb-6">
           <div className="glass-card p-4 text-center">
             <p className="text-sm text-muted-foreground">Time</p>
             <div className="flex items-center justify-center space-x-1">
@@ -342,7 +423,7 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
           </div>
           <div className="glass-card p-4 text-center">
             <p className="text-sm text-muted-foreground">Trial</p>
-            <p className="text-lg font-bold text-foreground">{currentTrial + 1}/{level.trials}</p>
+            <p className="text-lg font-bold text-foreground">{currentTrial + 1}/{currentAction?.trials || 0}</p>
           </div>
           <div className="glass-card p-4 text-center">
             <p className="text-sm text-muted-foreground">Score</p>
@@ -351,6 +432,10 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
           <div className="glass-card p-4 text-center">
             <p className="text-sm text-muted-foreground">Correct</p>
             <p className="text-lg font-bold text-success">{correct}</p>
+          </div>
+          <div className="glass-card p-4 text-center">
+            <p className="text-sm text-muted-foreground">AI Explore</p>
+            <p className="text-lg font-bold text-primary">{Math.round(banditStats.epsilon * 100)}%</p>
           </div>
         </div>
 
@@ -367,12 +452,12 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
                   <p className="text-sm text-muted-foreground">👁️ Study the target shape</p>
                   <p className="text-sm text-muted-foreground">🎯 Find matching shapes quickly</p>
                   <p className="text-sm text-muted-foreground">⚡ Speed bonus for fast responses</p>
-                  <p className="text-sm text-muted-foreground">📈 {LEVELS.length} difficulty levels</p>
+                  <p className="text-sm text-muted-foreground">🤖 AI adapts difficulty to your skill</p>
                 </div>
                 <div className="bg-primary/10 p-4 rounded-lg">
-                  <p className="text-sm font-semibold text-foreground">Level {currentLevel + 1}</p>
+                  <p className="text-sm font-semibold text-foreground">Starting Level {currentLevel}</p>
                   <p className="text-xs text-muted-foreground">
-                    {level.trials} trials • {level.gridSize}×{level.gridSize} grid
+                    AI Skill: {Math.round(banditStats.skillLevel * 100)}%
                   </p>
                 </div>
               </div>
@@ -381,9 +466,8 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
                 Start Training
               </Button>
             </div>
-          ) : trials.length > 0 && currentTrial < trials.length ? (
+          ) : trials.length > 0 && currentTrial < trials.length && currentAction ? (
             <>
-              {/* Target Shape */}
               {showTarget && (
                 <div className="glass-card p-6">
                   <div className="text-center space-y-4">
@@ -398,14 +482,13 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
                 </div>
               )}
 
-              {/* Search Grid */}
               {!showTarget && (
                 <div className="glass-card p-6">
                   <div className="text-center space-y-4">
                     <h3 className="text-xl font-semibold text-foreground">Find the matching shape:</h3>
                     <div 
                       className="grid gap-4 mx-auto max-w-2xl"
-                      style={{ gridTemplateColumns: `repeat(${level.gridSize}, 1fr)` }}
+                      style={{ gridTemplateColumns: `repeat(${currentAction.gridSize}, 1fr)` }}
                     >
                       {trials[currentTrial].shapes.map((shape, index) => (
                         <div key={shape.id} className="flex justify-center items-center p-4">
