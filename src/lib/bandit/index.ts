@@ -10,6 +10,8 @@ export { AttentionBandit, attentionBandit, type AttentionContext, type Attention
 export { ReactionBandit, reactionBandit, type ReactionContext, type ReactionAction } from './reactionBandit';
 export { WordMemoryBandit, wordMemoryBandit, type WordMemoryContext, type WordMemoryAction } from './wordMemoryBandit';
 export { MathChallengeBandit, mathChallengeBandit, type MathContext, type MathAction } from './mathChallengeBandit';
+export { VisualProcessingBandit, visualProcessingBandit, type VisualContext, type VisualAction } from './visualProcessingBandit';
+export { ExecutiveFunctionBandit, executiveFunctionBandit, type ExecutiveContext, type ExecutiveAction } from './executiveFunctionBandit';
 
 // Re-export main types with aliases for backward compatibility
 export type { UserContext as Context, GameAction as GameConfig } from './types';
