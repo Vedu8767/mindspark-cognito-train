@@ -12,6 +12,8 @@ export { WordMemoryBandit, wordMemoryBandit, type WordMemoryContext, type WordMe
 export { MathChallengeBandit, mathChallengeBandit, type MathContext, type MathAction } from './mathChallengeBandit';
 export { VisualProcessingBandit, visualProcessingBandit, type VisualContext, type VisualAction } from './visualProcessingBandit';
 export { ExecutiveFunctionBandit, executiveFunctionBandit, type ExecutiveContext, type ExecutiveAction } from './executiveFunctionBandit';
+export { SpatialBandit, spatialBandit, type SpatialContext, type SpatialAction } from './spatialBandit';
+export { ProcessingSpeedBandit, processingSpeedBandit, type ProcessingContext, type ProcessingAction } from './processingSpeedBandit';
 
 // Re-export main types with aliases for backward compatibility
 export type { UserContext as Context, GameAction as GameConfig } from './types';

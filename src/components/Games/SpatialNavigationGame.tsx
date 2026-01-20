@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { RotateCcw, Home, Trophy, Navigation, MapPin, Target } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { RotateCcw, Home, Trophy, Navigation, MapPin, Target, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { spatialBandit, type SpatialContext, type SpatialAction } from '@/lib/bandit/spatialBandit';
 
 interface SpatialNavigationGameProps {
   onComplete: (score: number) => void;
@@ -23,16 +24,8 @@ interface Trial {
   timeSpent: number;
 }
 
-const LEVELS = [
-  { level: 1, gridSize: 6, pathLength: 4, trials: 8, timeLimit: 180 },
-  { level: 2, gridSize: 7, pathLength: 5, trials: 10, timeLimit: 200 },
-  { level: 3, gridSize: 8, pathLength: 6, trials: 12, timeLimit: 220 },
-  { level: 4, gridSize: 9, pathLength: 7, trials: 14, timeLimit: 240 },
-  { level: 5, gridSize: 10, pathLength: 8, trials: 16, timeLimit: 260 },
-];
-
 const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(0);
+  const [currentLevel, setCurrentLevel] = useState(1);
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
   const [score, setScore] = useState(0);
@@ -45,45 +38,89 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
   const [playerPosition, setPlayerPosition] = useState<Position>({ x: 0, y: 0 });
   const [trialStartTime, setTrialStartTime] = useState(0);
   const [moveCount, setMoveCount] = useState(0);
+  const [sessionStart] = useState(Date.now());
+  const [levelStartTime, setLevelStartTime] = useState(0);
+  const [totalMoves, setTotalMoves] = useState(0);
+  const [currentAction, setCurrentAction] = useState<SpatialAction | null>(null);
 
-  const level = LEVELS[currentLevel];
+  // Build context for bandit
+  const buildContext = useCallback((): SpatialContext => {
+    const hour = new Date().getHours();
+    const timeOfDay = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+    
+    const completedTrials = trials.filter(t => t.completed);
+    const recentAccuracy = completedTrials.length > 0
+      ? completedTrials.filter(t => t.correct).length / completedTrials.length
+      : 0.5;
+    
+    const avgMoves = completedTrials.length > 0
+      ? completedTrials.reduce((sum, t) => sum + t.moves, 0) / completedTrials.length
+      : 5;
+    
+    return {
+      currentLevel,
+      recentAccuracy,
+      recentSpeed: timeLeft > 0 ? 1 - (timeLeft / (currentAction?.timeLimit || 180)) : 0.5,
+      avgMoveCount: avgMoves,
+      sessionLength: (Date.now() - sessionStart) / 1000,
+      timeOfDay,
+      previousDifficulty: currentAction?.difficultyMultiplier || 1,
+      streakCount: correct,
+      userType: avgMoves < 6 ? 'efficient_navigator' : avgMoves > 10 ? 'explorer' : 'balanced',
+      frustrationLevel: recentAccuracy < 0.4 ? 0.7 : recentAccuracy < 0.6 ? 0.4 : 0.1,
+      engagementLevel: Math.min(1, (Date.now() - sessionStart) / 600000),
+      successRate: recentAccuracy,
+      avgPathCompletionRate: recentAccuracy,
+      spatialMemoryStrength: recentAccuracy * 0.8 + (avgMoves < 8 ? 0.2 : 0),
+    };
+  }, [currentLevel, trials, timeLeft, correct, sessionStart, currentAction]);
 
+  // Get action from bandit
+  const getAction = useCallback(() => {
+    const context = buildContext();
+    return spatialBandit.selectAction(context);
+  }, [buildContext]);
+
+  // Initialize level with bandit action
   useEffect(() => {
-    if (currentLevel < LEVELS.length) {
-      generateTrials();
+    if (gameStarted && !levelComplete && !gameComplete) {
+      const action = getAction();
+      setCurrentAction(action);
+      generateTrials(action);
+      setLevelStartTime(Date.now());
     }
-  }, [currentLevel]);
+  }, [currentLevel, gameStarted]);
 
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !gameComplete) {
+    } else if (timeLeft === 0 && gameStarted && !gameComplete && !levelComplete && trials.length > 0) {
       completeLevel();
     }
-  }, [timeLeft, gameStarted, gameComplete, levelComplete]);
+  }, [timeLeft, gameStarted, gameComplete, levelComplete, trials.length]);
 
-  const generatePath = (): Position[] => {
+  const generatePath = (gridSize: number, pathLength: number): Position[] => {
     const path: Position[] = [];
     const start = {
-      x: Math.floor(level.gridSize / 2),
-      y: Math.floor(level.gridSize / 2)
+      x: Math.floor(gridSize / 2),
+      y: Math.floor(gridSize / 2)
     };
     path.push(start);
 
     let current = { ...start };
-    for (let i = 1; i < level.pathLength; i++) {
+    for (let i = 1; i < pathLength; i++) {
       const directions = [
-        { x: 0, y: -1 }, // up
-        { x: 1, y: 0 },  // right
-        { x: 0, y: 1 },  // down
-        { x: -1, y: 0 }  // left
+        { x: 0, y: -1 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 },
+        { x: -1, y: 0 }
       ];
 
       const validDirections = directions.filter(dir => {
         const next = { x: current.x + dir.x, y: current.y + dir.y };
-        return next.x >= 0 && next.x < level.gridSize && 
-               next.y >= 0 && next.y < level.gridSize &&
+        return next.x >= 0 && next.x < gridSize && 
+               next.y >= 0 && next.y < gridSize &&
                !path.some(pos => pos.x === next.x && pos.y === next.y);
       });
 
@@ -97,8 +134,8 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
     return path;
   };
 
-  const generateTrial = (id: number): Trial => {
-    const path = generatePath();
+  const generateTrial = (id: number, action: SpatialAction): Trial => {
+    const path = generatePath(action.gridSize, action.pathLength);
     const startPosition = path[0];
     const targetPosition = path[path.length - 1];
 
@@ -114,13 +151,13 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
     };
   };
 
-  const generateTrials = () => {
-    const newTrials = Array.from({ length: level.trials }, (_, i) => 
-      generateTrial(i)
+  const generateTrials = (action: SpatialAction) => {
+    const newTrials = Array.from({ length: action.trialCount }, (_, i) => 
+      generateTrial(i, action)
     );
     setTrials(newTrials);
     setCurrentTrial(0);
-    setTimeLeft(level.timeLimit);
+    setTimeLeft(action.timeLimit);
     setLevelComplete(false);
     setCorrect(0);
     setGamePhase('study');
@@ -128,6 +165,7 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
       setPlayerPosition({ ...newTrials[0].playerPosition });
     }
     setMoveCount(0);
+    setTotalMoves(0);
   };
 
   const startNavigation = () => {
@@ -137,7 +175,7 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
   };
 
   const movePlayer = (direction: 'up' | 'down' | 'left' | 'right') => {
-    if (gamePhase !== 'navigate') return;
+    if (gamePhase !== 'navigate' || !currentAction) return;
 
     const directions = {
       up: { x: 0, y: -1 },
@@ -152,13 +190,12 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
       y: playerPosition.y + move.y
     };
 
-    // Check bounds
-    if (newPosition.x >= 0 && newPosition.x < level.gridSize &&
-        newPosition.y >= 0 && newPosition.y < level.gridSize) {
+    if (newPosition.x >= 0 && newPosition.x < currentAction.gridSize &&
+        newPosition.y >= 0 && newPosition.y < currentAction.gridSize) {
       setPlayerPosition(newPosition);
       setMoveCount(prev => prev + 1);
+      setTotalMoves(prev => prev + 1);
 
-      // Check if reached target
       const trial = trials[currentTrial];
       if (newPosition.x === trial.targetPosition.x && 
           newPosition.y === trial.targetPosition.y) {
@@ -194,7 +231,7 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
     }
 
     setTimeout(() => {
-      if (currentTrial + 1 >= level.trials) {
+      if (currentTrial + 1 >= (currentAction?.trialCount || 8)) {
         completeLevel();
       } else {
         const nextTrial = currentTrial + 1;
@@ -209,18 +246,53 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
   const completeLevel = () => {
     setLevelComplete(true);
     
-    // Calculate level completion bonus
-    const accuracyBonus = Math.floor((correct / level.trials) * 50);
+    const completedTrials = trials.filter(t => t.completed);
+    const accuracy = completedTrials.length > 0 
+      ? completedTrials.filter(t => t.correct).length / completedTrials.length 
+      : 0;
+    const avgMoves = completedTrials.length > 0 
+      ? completedTrials.reduce((sum, t) => sum + t.moves, 0) / completedTrials.length 
+      : 10;
+    const optimalMoves = (currentAction?.pathLength || 4) - 1;
+    const moveEfficiency = avgMoves > 0 ? Math.min(1, optimalMoves / avgMoves) : 0.5;
+    
+    const accuracyBonus = Math.floor(accuracy * 50);
     const timeBonus = Math.floor(timeLeft * 2);
     setScore(prev => prev + accuracyBonus + timeBonus);
+
+    // Update bandit
+    if (currentAction) {
+      const context = buildContext();
+      const metrics = {
+        completed: true,
+        accuracy,
+        timeEfficiency: timeLeft / (currentAction.timeLimit || 180),
+        engagement: 0.8,
+        frustration: accuracy < 0.5 ? 0.6 : 0.2,
+        optimalMoves: optimalMoves * (currentAction.trialCount || 8),
+        actualMoves: totalMoves,
+        avgReactionTime: completedTrials.length > 0 
+          ? completedTrials.reduce((sum, t) => sum + t.timeSpent, 0) / completedTrials.length 
+          : 2000,
+        pathCompletionRate: accuracy,
+        moveEfficiency,
+      };
+      
+      const reward = spatialBandit.calculateReward(metrics);
+      spatialBandit.updateModel(context, currentAction, reward, metrics);
+    }
+  };
+
+  const proceedToNextLevel = () => {
+    const context = buildContext();
+    const nextLevel = spatialBandit.getOptimalLevel(context);
     
-    setTimeout(() => {
-      if (currentLevel < LEVELS.length - 1) {
-        setCurrentLevel(prev => prev + 1);
-      } else {
-        endGame();
-      }
-    }, 3000);
+    if (nextLevel > 25 || (currentLevel >= 25 && correct > (currentAction?.trialCount || 8) * 0.7)) {
+      endGame();
+    } else {
+      setCurrentLevel(nextLevel);
+      setLevelComplete(false);
+    }
   };
 
   const endGame = () => {
@@ -234,19 +306,26 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
   };
 
   const restartGame = () => {
-    setCurrentLevel(0);
+    setCurrentLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);
+    setLevelComplete(false);
+    setTrials([]);
+    setCurrentAction(null);
   };
+
+  const banditStats = spatialBandit.getStats();
+  const nextDifficulty = spatialBandit.predictNextLevelDifficulty(buildContext());
+  const performanceInsight = spatialBandit.getPerformanceInsight(buildContext());
 
   const renderGrid = () => {
     const trial = trials[currentTrial];
-    if (!trial) return null;
+    if (!trial || !currentAction) return null;
 
     const cells = [];
-    for (let y = 0; y < level.gridSize; y++) {
-      for (let x = 0; x < level.gridSize; x++) {
+    for (let y = 0; y < currentAction.gridSize; y++) {
+      for (let x = 0; x < currentAction.gridSize; x++) {
         const isPlayer = playerPosition.x === x && playerPosition.y === y;
         const isTarget = trial.targetPosition.x === x && trial.targetPosition.y === y && gamePhase === 'navigate';
         const isPath = gamePhase === 'study' && trial.path.some(pos => pos.x === x && pos.y === y);
@@ -286,8 +365,8 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
       <div 
         className="grid gap-1 mx-auto"
         style={{ 
-          gridTemplateColumns: `repeat(${level.gridSize}, 1fr)`,
-          maxWidth: `${level.gridSize * 40}px`
+          gridTemplateColumns: `repeat(${currentAction.gridSize}, 1fr)`,
+          maxWidth: `${currentAction.gridSize * 40}px`
         }}
       >
         {cells}
@@ -305,7 +384,7 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
           <div>
             <h2 className="text-2xl font-bold text-foreground mb-2">Navigation Expert!</h2>
             <p className="text-muted-foreground mb-4">
-              You completed all {LEVELS.length} levels with {correct} successful navigations!
+              You reached level {currentLevel} with {correct} successful navigations!
             </p>
             <div className="bg-primary/10 p-4 rounded-lg">
               <p className="text-lg font-bold text-primary">Final Score: {score}</p>
@@ -334,14 +413,32 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
             <Navigation className="h-10 w-10 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel + 1} Complete!</h2>
-            <p className="text-muted-foreground">
-              Excellent spatial memory! Moving to the next challenge.
-            </p>
+            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
+            <p className="text-muted-foreground mb-2">{performanceInsight}</p>
+            
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <span className="text-sm text-muted-foreground">Next level will be:</span>
+              {nextDifficulty === 'harder' && (
+                <span className="flex items-center text-destructive font-semibold">
+                  <TrendingUp className="h-4 w-4 mr-1" /> Harder
+                </span>
+              )}
+              {nextDifficulty === 'easier' && (
+                <span className="flex items-center text-success font-semibold">
+                  <TrendingDown className="h-4 w-4 mr-1" /> Easier
+                </span>
+              )}
+              {nextDifficulty === 'same' && (
+                <span className="flex items-center text-primary font-semibold">
+                  <Minus className="h-4 w-4 mr-1" /> Similar
+                </span>
+              )}
+            </div>
+            
             <div className="grid grid-cols-2 gap-4 mt-4">
               <div className="bg-success/10 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">Correct</p>
-                <p className="text-xl font-bold text-success">{correct}/{level.trials}</p>
+                <p className="text-xl font-bold text-success">{correct}/{currentAction?.trialCount || 8}</p>
               </div>
               <div className="bg-primary/10 p-3 rounded-lg">
                 <p className="text-sm text-muted-foreground">Score</p>
@@ -349,6 +446,9 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
               </div>
             </div>
           </div>
+          <Button onClick={proceedToNextLevel} className="btn-primary w-full">
+            Continue to Level {spatialBandit.getOptimalLevel(buildContext())}
+          </Button>
         </div>
       </div>
     );
@@ -361,7 +461,12 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
         <div className="glass-card-strong p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Spatial Navigation - Level {currentLevel + 1}</h1>
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-2xl font-bold text-foreground">Spatial Navigation - Level {currentLevel}</h1>
+                <span className="px-2 py-1 bg-primary/20 text-primary text-xs font-semibold rounded-full flex items-center gap-1">
+                  <Brain className="h-3 w-3" /> AI Adaptive
+                </span>
+              </div>
               <p className="text-muted-foreground">Study the path, then navigate to the target!</p>
             </div>
             <Button onClick={onExit} variant="outline">
@@ -369,31 +474,40 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
               Exit Game
             </Button>
           </div>
+          
+          {gameStarted && (
+            <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+              <span>Exploration: {(banditStats.epsilon * 100).toFixed(0)}%</span>
+              <span>Skill: {(banditStats.skillLevel * 100).toFixed(0)}%</span>
+            </div>
+          )}
         </div>
 
         {/* Game Stats */}
-        <div className="grid grid-cols-5 gap-4 mb-6">
-          <div className="glass-card p-4 text-center">
-            <p className="text-sm text-muted-foreground">Time</p>
-            <p className="text-lg font-bold text-foreground">{timeLeft}s</p>
+        {gameStarted && currentAction && (
+          <div className="grid grid-cols-5 gap-4 mb-6">
+            <div className="glass-card p-4 text-center">
+              <p className="text-sm text-muted-foreground">Time</p>
+              <p className="text-lg font-bold text-foreground">{timeLeft}s</p>
+            </div>
+            <div className="glass-card p-4 text-center">
+              <p className="text-sm text-muted-foreground">Trial</p>
+              <p className="text-lg font-bold text-foreground">{currentTrial + 1}/{currentAction.trialCount}</p>
+            </div>
+            <div className="glass-card p-4 text-center">
+              <p className="text-sm text-muted-foreground">Score</p>
+              <p className="text-lg font-bold text-foreground">{score}</p>
+            </div>
+            <div className="glass-card p-4 text-center">
+              <p className="text-sm text-muted-foreground">Correct</p>
+              <p className="text-lg font-bold text-success">{correct}</p>
+            </div>
+            <div className="glass-card p-4 text-center">
+              <p className="text-sm text-muted-foreground">Moves</p>
+              <p className="text-lg font-bold text-accent">{moveCount}</p>
+            </div>
           </div>
-          <div className="glass-card p-4 text-center">
-            <p className="text-sm text-muted-foreground">Trial</p>
-            <p className="text-lg font-bold text-foreground">{currentTrial + 1}/{level.trials}</p>
-          </div>
-          <div className="glass-card p-4 text-center">
-            <p className="text-sm text-muted-foreground">Score</p>
-            <p className="text-lg font-bold text-foreground">{score}</p>
-          </div>
-          <div className="glass-card p-4 text-center">
-            <p className="text-sm text-muted-foreground">Correct</p>
-            <p className="text-lg font-bold text-success">{correct}</p>
-          </div>
-          <div className="glass-card p-4 text-center">
-            <p className="text-sm text-muted-foreground">Moves</p>
-            <p className="text-lg font-bold text-accent">{moveCount}</p>
-          </div>
-        </div>
+        )}
 
         {/* Game Area */}
         <div className="space-y-6">
@@ -408,12 +522,12 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
                   <p className="text-sm text-muted-foreground">🗺️ Study the highlighted path</p>
                   <p className="text-sm text-muted-foreground">🎯 Navigate to the target location</p>
                   <p className="text-sm text-muted-foreground">⚡ Fewer moves = higher score</p>
-                  <p className="text-sm text-muted-foreground">📈 {LEVELS.length} difficulty levels</p>
+                  <p className="text-sm text-muted-foreground">🧠 AI adapts difficulty to your skill</p>
                 </div>
                 <div className="bg-primary/10 p-4 rounded-lg">
-                  <p className="text-sm font-semibold text-foreground">Level {currentLevel + 1}</p>
+                  <p className="text-sm font-semibold text-foreground">Starting Level {currentLevel}</p>
                   <p className="text-xs text-muted-foreground">
-                    {level.trials} trials • {level.gridSize}×{level.gridSize} grid
+                    Difficulty adjusts based on your performance
                   </p>
                 </div>
               </div>
@@ -422,7 +536,7 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
                 Start Training
               </Button>
             </div>
-          ) : trials.length > 0 && currentTrial < trials.length ? (
+          ) : trials.length > 0 && currentTrial < trials.length && currentAction ? (
             <>
               {/* Game Grid */}
               <div className="glass-card p-6">
