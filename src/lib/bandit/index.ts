@@ -14,6 +14,8 @@ export { VisualProcessingBandit, visualProcessingBandit, type VisualContext, typ
 export { ExecutiveFunctionBandit, executiveFunctionBandit, type ExecutiveContext, type ExecutiveAction } from './executiveFunctionBandit';
 export { SpatialBandit, spatialBandit, type SpatialContext, type SpatialAction } from './spatialBandit';
 export { ProcessingSpeedBandit, processingSpeedBandit, type ProcessingContext, type ProcessingAction } from './processingSpeedBandit';
+export { towerOfHanoiBandit, type HanoiContext, type HanoiAction } from './towerOfHanoiBandit';
+export { audioMemoryBandit, type AudioContext as AudioBanditContext, type AudioAction } from './audioMemoryBandit';
 
 // Re-export main types with aliases for backward compatibility
 export type { UserContext as Context, GameAction as GameConfig } from './types';
