@@ -6,6 +6,8 @@ import CognitiveChart from '@/components/Dashboard/CognitiveChart';
 import StatsOverview from '@/components/Dashboard/StatsOverview';
 import ActivityFeed from '@/components/Dashboard/ActivityFeed';
 import QuickActions from '@/components/Dashboard/QuickActions';
+import CognitiveAgeCard from '@/components/Dashboard/CognitiveAgeCard';
+import ProgressHeatmap from '@/components/Dashboard/ProgressHeatmap';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -75,16 +77,21 @@ const Dashboard = () => {
           {/* Stats Overview */}
           <StatsOverview data={statsData} />
 
-          {/* Main Content Grid */}
+          {/* Cognitive Age + Chart */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <CognitiveChart />
             </div>
-            
             <div className="space-y-6">
-              <QuickActions />
+              <CognitiveAgeCard />
             </div>
           </div>
+
+          {/* Progress Heatmap */}
+          <ProgressHeatmap />
+
+          {/* Quick Actions */}
+          <QuickActions />
         </TabsContent>
 
         <TabsContent value="progress" className="space-y-6">

@@ -5,6 +5,8 @@ import Dashboard from '@/pages/Dashboard';
 import Games from '@/pages/Games';
 import Analytics from '@/pages/Analytics';
 import Articles from '@/pages/Articles';
+import AIInsightsDashboard from '@/pages/AIInsightsDashboard';
+import DailyChallengePage from '@/pages/DailyChallengePage';
 import MemoryMatchingGame from '@/components/Games/MemoryMatchingGame';
 
 const AppLayout = () => {
@@ -190,6 +192,10 @@ const AppLayout = () => {
         return <Dashboard />;
       case 'games':
         return <Games />;
+      case 'daily-challenge':
+        return <DailyChallengePage />;
+      case 'ai-dashboard':
+        return <AIInsightsDashboard />;
       case 'analytics':
         return <Analytics />;
       case 'articles':
