@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2, LogOut } from 'lucide-react';
+import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2, LogOut, Cpu, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 
@@ -15,6 +15,8 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
     { id: 'games', label: 'Brain Games', icon: Gamepad2 },
+    { id: 'daily-challenge', label: 'Daily', icon: Target },
+    { id: 'ai-dashboard', label: 'AI Lab', icon: Cpu },
     { id: 'analytics', label: 'Progress', icon: BarChart3 },
     { id: 'articles', label: 'Brain Health', icon: BookOpen },
   ];
