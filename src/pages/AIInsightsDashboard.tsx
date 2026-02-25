@@ -1,60 +1,97 @@
-import { useState, useMemo } from 'react';
-import { Brain, Cpu, Activity, TrendingUp, Gauge, Zap, Eye, Target, Volume2, Calculator, Puzzle, Navigation, ArrowUp, ArrowDown, Minus } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { Brain, Cpu, Activity, TrendingUp, Gauge, Zap, Eye, Target, Volume2, Calculator, Puzzle, Navigation } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, Legend } from 'recharts';
+import {
+  memoryGameBandit,
+  attentionBandit,
+  reactionBandit,
+  wordMemoryBandit,
+  mathChallengeBandit,
+  visualProcessingBandit,
+  executiveFunctionBandit,
+  spatialBandit,
+  processingSpeedBandit,
+  towerOfHanoiBandit,
+  audioMemoryBandit,
+} from '@/lib/bandit';
+import { patternRecognitionBandit } from '@/lib/bandit/patternBandit';
 
 interface GameBanditInfo {
   id: string;
   name: string;
   icon: React.ElementType;
   domain: 'memory' | 'attention' | 'executive' | 'processing';
-  currentLevel: number;
-  maxLevel: number;
   explorationRate: number;
   skillLevel: number;
   totalPulls: number;
-  avgReward: number;
-  adaptationSpeed: string;
+  currentLevel: number;
+}
+
+function getAdaptationSpeed(epsilon: number): string {
+  if (epsilon <= 0.10) return 'slow';
+  if (epsilon <= 0.20) return 'medium';
+  return 'fast';
+}
+
+function collectBanditData(): GameBanditInfo[] {
+  const memStats = memoryGameBandit.getStats();
+  const attStats = attentionBandit.getStats();
+  const reactStats = reactionBandit.getStats();
+  const patStats = patternRecognitionBandit.getStats();
+  const wordStats = wordMemoryBandit.getStats();
+  const mathStats = mathChallengeBandit.getStats();
+  const visStats = visualProcessingBandit.getStats();
+  const execStats = executiveFunctionBandit.getStats();
+  const spatStats = spatialBandit.getStats();
+  const procStats = processingSpeedBandit.getStats();
+  const hanoiStats = towerOfHanoiBandit.getStats();
+  const audioStats = audioMemoryBandit.getStats();
+
+  return [
+    { id: 'memory-matching', name: 'Memory Matching', icon: Brain, domain: 'memory', explorationRate: memStats.epsilon, skillLevel: memStats.skillLevel, totalPulls: memStats.totalPulls, currentLevel: Math.round(memStats.skillLevel * 25) || 1 },
+    { id: 'attention-focus', name: 'Attention Focus', icon: Target, domain: 'attention', explorationRate: attStats.epsilon, skillLevel: attStats.skillLevel, totalPulls: attStats.totalPulls, currentLevel: Math.round(attStats.skillLevel * 25) || 1 },
+    { id: 'reaction-speed', name: 'Reaction Speed', icon: Zap, domain: 'processing', explorationRate: reactStats.epsilon, skillLevel: reactStats.skillLevel, totalPulls: reactStats.totalPulls, currentLevel: Math.round(reactStats.skillLevel * 25) || 1 },
+    { id: 'pattern-recognition', name: 'Pattern Recognition', icon: Puzzle, domain: 'executive', explorationRate: patStats.epsilon, skillLevel: patStats.skillLevel, totalPulls: patStats.totalPulls, currentLevel: patStats.currentLevel ?? 1 },
+    { id: 'word-memory', name: 'Word Memory', icon: Brain, domain: 'memory', explorationRate: wordStats.epsilon, skillLevel: (wordStats.currentLevel ?? 1) / 25, totalPulls: wordStats.totalPulls, currentLevel: wordStats.currentLevel ?? 1 },
+    { id: 'math-challenge', name: 'Math Challenge', icon: Calculator, domain: 'executive', explorationRate: mathStats.epsilon, skillLevel: (mathStats.currentLevel ?? 1) / 25, totalPulls: mathStats.totalPulls, currentLevel: mathStats.currentLevel ?? 1 },
+    { id: 'visual-processing', name: 'Visual Processing', icon: Eye, domain: 'processing', explorationRate: visStats.epsilon, skillLevel: visStats.skillLevel, totalPulls: visStats.totalPulls, currentLevel: Math.round(visStats.skillLevel * 25) || 1 },
+    { id: 'executive-function', name: 'Executive Function', icon: Cpu, domain: 'executive', explorationRate: execStats.epsilon, skillLevel: execStats.skillLevel, totalPulls: execStats.totalPulls, currentLevel: Math.round(execStats.skillLevel * 25) || 1 },
+    { id: 'spatial-navigation', name: 'Spatial Navigation', icon: Navigation, domain: 'memory', explorationRate: spatStats.epsilon, skillLevel: spatStats.skillLevel, totalPulls: spatStats.totalPulls, currentLevel: Math.round(spatStats.skillLevel * 25) || 1 },
+    { id: 'processing-speed', name: 'Processing Speed', icon: Zap, domain: 'processing', explorationRate: procStats.epsilon, skillLevel: procStats.skillLevel, totalPulls: procStats.totalPulls, currentLevel: Math.round(procStats.skillLevel * 25) || 1 },
+    { id: 'audio-memory', name: 'Audio Memory', icon: Volume2, domain: 'memory', explorationRate: audioStats.epsilon, skillLevel: audioStats.skillLevel / 100, totalPulls: audioStats.totalPulls, currentLevel: Math.max(1, Math.round(audioStats.skillLevel / 4)) },
+    { id: 'tower-hanoi', name: 'Tower of Hanoi', icon: Puzzle, domain: 'executive', explorationRate: hanoiStats.epsilon, skillLevel: hanoiStats.skillLevel / 100, totalPulls: hanoiStats.totalPulls, currentLevel: Math.max(1, Math.round(hanoiStats.skillLevel / 4)) },
+  ];
 }
 
 const AIInsightsDashboard = () => {
-  // Mock bandit data for all 12 games (in real app, pull from bandit instances)
-  const gameBandits: GameBanditInfo[] = [
-    { id: 'memory-matching', name: 'Memory Matching', icon: Brain, domain: 'memory', currentLevel: 12, maxLevel: 25, explorationRate: 0.15, skillLevel: 0.72, totalPulls: 48, avgReward: 7.2, adaptationSpeed: 'fast' },
-    { id: 'attention-focus', name: 'Attention Focus', icon: Target, domain: 'attention', currentLevel: 15, maxLevel: 25, explorationRate: 0.12, skillLevel: 0.78, totalPulls: 35, avgReward: 7.8, adaptationSpeed: 'medium' },
-    { id: 'reaction-speed', name: 'Reaction Speed', icon: Zap, domain: 'processing', currentLevel: 8, maxLevel: 25, explorationRate: 0.22, skillLevel: 0.55, totalPulls: 22, avgReward: 6.1, adaptationSpeed: 'fast' },
-    { id: 'pattern-recognition', name: 'Pattern Recognition', icon: Puzzle, domain: 'executive', currentLevel: 10, maxLevel: 25, explorationRate: 0.18, skillLevel: 0.65, totalPulls: 30, avgReward: 6.8, adaptationSpeed: 'medium' },
-    { id: 'word-memory', name: 'Word Memory', icon: Brain, domain: 'memory', currentLevel: 14, maxLevel: 25, explorationRate: 0.10, skillLevel: 0.80, totalPulls: 52, avgReward: 8.1, adaptationSpeed: 'slow' },
-    { id: 'math-challenge', name: 'Math Challenge', icon: Calculator, domain: 'executive', currentLevel: 7, maxLevel: 25, explorationRate: 0.25, skillLevel: 0.48, totalPulls: 18, avgReward: 5.5, adaptationSpeed: 'fast' },
-    { id: 'visual-processing', name: 'Visual Processing', icon: Eye, domain: 'processing', currentLevel: 16, maxLevel: 25, explorationRate: 0.08, skillLevel: 0.85, totalPulls: 60, avgReward: 8.5, adaptationSpeed: 'slow' },
-    { id: 'executive-function', name: 'Executive Function', icon: Cpu, domain: 'executive', currentLevel: 11, maxLevel: 25, explorationRate: 0.16, skillLevel: 0.68, totalPulls: 40, avgReward: 7.0, adaptationSpeed: 'medium' },
-    { id: 'spatial-navigation', name: 'Spatial Navigation', icon: Navigation, domain: 'memory', currentLevel: 9, maxLevel: 25, explorationRate: 0.20, skillLevel: 0.58, totalPulls: 25, avgReward: 6.3, adaptationSpeed: 'fast' },
-    { id: 'processing-speed', name: 'Processing Speed', icon: Zap, domain: 'processing', currentLevel: 13, maxLevel: 25, explorationRate: 0.14, skillLevel: 0.75, totalPulls: 45, avgReward: 7.5, adaptationSpeed: 'medium' },
-    { id: 'audio-memory', name: 'Audio Memory', icon: Volume2, domain: 'memory', currentLevel: 6, maxLevel: 25, explorationRate: 0.28, skillLevel: 0.42, totalPulls: 15, avgReward: 5.0, adaptationSpeed: 'fast' },
-    { id: 'tower-hanoi', name: 'Tower of Hanoi', icon: Puzzle, domain: 'executive', currentLevel: 18, maxLevel: 25, explorationRate: 0.06, skillLevel: 0.90, totalPulls: 70, avgReward: 8.9, adaptationSpeed: 'slow' },
-  ];
+  const [gameBandits, setGameBandits] = useState<GameBanditInfo[]>(() => collectBanditData());
 
-  const domainColors: Record<string, string> = {
-    memory: 'hsl(var(--memory))',
-    attention: 'hsl(var(--attention))',
-    executive: 'hsl(var(--executive))',
-    processing: 'hsl(var(--processing))',
-  };
+  // Refresh data periodically when tab is focused
+  useEffect(() => {
+    const refresh = () => setGameBandits(collectBanditData());
+    const interval = setInterval(refresh, 5000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(interval); window.removeEventListener('focus', refresh); };
+  }, []);
 
   const domainAverages = useMemo(() => {
     const domains = ['memory', 'attention', 'executive', 'processing'] as const;
     return domains.map(d => {
       const games = gameBandits.filter(g => g.domain === d);
+      const avgSkill = games.length > 0 ? games.reduce((s, g) => s + g.skillLevel, 0) / games.length : 0;
+      const avgLevel = games.length > 0 ? games.reduce((s, g) => s + g.currentLevel, 0) / games.length : 0;
+      const avgExploration = games.length > 0 ? games.reduce((s, g) => s + g.explorationRate, 0) / games.length : 0;
       return {
         domain: d.charAt(0).toUpperCase() + d.slice(1),
-        skillLevel: Math.round((games.reduce((s, g) => s + g.skillLevel, 0) / games.length) * 100),
-        avgLevel: Math.round(games.reduce((s, g) => s + g.currentLevel, 0) / games.length),
-        explorationRate: Math.round((games.reduce((s, g) => s + g.explorationRate, 0) / games.length) * 100),
+        skillLevel: Math.round(Math.min(100, avgSkill * 100)),
+        avgLevel: Math.round(avgLevel),
+        explorationRate: Math.round(avgExploration * 100),
       };
     });
-  }, []);
+  }, [gameBandits]);
 
   const radarData = domainAverages.map(d => ({
     subject: d.domain,
@@ -63,17 +100,10 @@ const AIInsightsDashboard = () => {
     fullMark: 100,
   }));
 
-  // Simulated learning curve data
-  const learningCurve = Array.from({ length: 20 }, (_, i) => ({
-    session: i + 1,
-    exploration: Math.max(5, 30 - i * 1.3),
-    avgReward: Math.min(9.5, 4 + i * 0.28 + Math.sin(i) * 0.3),
-    skillLevel: Math.min(95, 30 + i * 3.2 + Math.sin(i * 0.5) * 2),
-  }));
-
   const overallExploration = Math.round(gameBandits.reduce((s, g) => s + g.explorationRate, 0) / gameBandits.length * 100);
-  const overallSkill = Math.round(gameBandits.reduce((s, g) => s + g.skillLevel, 0) / gameBandits.length * 100);
+  const overallSkill = Math.round(gameBandits.reduce((s, g) => s + Math.min(1, g.skillLevel), 0) / gameBandits.length * 100);
   const totalSessions = gameBandits.reduce((s, g) => s + g.totalPulls, 0);
+  const adaptedCount = gameBandits.filter(g => g.totalPulls > 0).length;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -86,7 +116,7 @@ const AIInsightsDashboard = () => {
           <div>
             <h1 className="text-3xl font-bold text-foreground">AI Adaptation Dashboard</h1>
             <p className="text-lg text-muted-foreground">
-              Real-time view of how the AI personalizes your training across all 12 games
+              Live data from your Epsilon-Greedy Contextual Bandits across all 12 games
             </p>
           </div>
         </div>
@@ -99,10 +129,10 @@ const AIInsightsDashboard = () => {
             <div className="p-3 bg-primary/10 rounded-xl w-12 h-12 mx-auto mb-3 flex items-center justify-center">
               <Gauge className="h-6 w-6 text-primary" />
             </div>
-            <p className="text-sm text-muted-foreground">Exploration Rate</p>
+            <p className="text-sm text-muted-foreground">Avg Exploration ε</p>
             <p className="text-2xl font-bold text-foreground">{overallExploration}%</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {overallExploration > 20 ? 'Still learning your style' : overallExploration > 10 ? 'Adapting well' : 'Fully personalized'}
+              {overallExploration > 20 ? 'Still learning your style' : overallExploration > 10 ? 'Adapting well' : totalSessions === 0 ? 'No data yet — play games!' : 'Fully personalized'}
             </p>
           </CardContent>
         </Card>
@@ -134,9 +164,9 @@ const AIInsightsDashboard = () => {
             <div className="p-3 bg-secondary/10 rounded-xl w-12 h-12 mx-auto mb-3 flex items-center justify-center">
               <Brain className="h-6 w-6 text-secondary" />
             </div>
-            <p className="text-sm text-muted-foreground">Games Adapted</p>
-            <p className="text-2xl font-bold text-foreground">12/12</p>
-            <p className="text-xs text-success mt-1">All games personalized</p>
+            <p className="text-sm text-muted-foreground">Games With Data</p>
+            <p className="text-2xl font-bold text-foreground">{adaptedCount}/12</p>
+            <p className="text-xs text-muted-foreground mt-1">{adaptedCount === 12 ? '✅ All games active' : `Play ${12 - adaptedCount} more to complete`}</p>
           </CardContent>
         </Card>
       </div>
@@ -145,12 +175,11 @@ const AIInsightsDashboard = () => {
         <TabsList className="grid w-full grid-cols-3 lg:w-fit">
           <TabsTrigger value="overview">Domain Overview</TabsTrigger>
           <TabsTrigger value="games">Per-Game Detail</TabsTrigger>
-          <TabsTrigger value="learning">Learning Curve</TabsTrigger>
+          <TabsTrigger value="learning">Exploration Analysis</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Radar Chart */}
             <Card className="glass-card p-6">
               <CardHeader className="p-0 pb-4">
                 <CardTitle className="text-lg">Cognitive Domain Balance</CardTitle>
@@ -169,7 +198,6 @@ const AIInsightsDashboard = () => {
               </CardContent>
             </Card>
 
-            {/* Domain Breakdown */}
             <Card className="glass-card p-6">
               <CardHeader className="p-0 pb-4">
                 <CardTitle className="text-lg">Domain Skill Levels</CardTitle>
@@ -197,7 +225,6 @@ const AIInsightsDashboard = () => {
         </TabsContent>
 
         <TabsContent value="games" className="space-y-6">
-          {/* Per-Game Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {gameBandits.map(game => {
               const Icon = game.icon;
@@ -205,6 +232,8 @@ const AIInsightsDashboard = () => {
                 game.domain === 'attention' ? 'bg-cognitive-attention/10' :
                 game.domain === 'executive' ? 'bg-cognitive-executive/10' :
                 'bg-cognitive-processing/10';
+              const speed = getAdaptationSpeed(game.explorationRate);
+              const clampedSkill = Math.min(100, Math.round(game.skillLevel * 100));
 
               return (
                 <Card key={game.id} className="glass-card hover:shadow-lg transition-all duration-300">
@@ -218,11 +247,12 @@ const AIInsightsDashboard = () => {
                         <p className="text-xs text-muted-foreground capitalize">{game.domain}</p>
                       </div>
                       <span className={`text-xs px-2 py-1 rounded-full ${
-                        game.adaptationSpeed === 'slow' ? 'bg-success/10 text-success' :
-                        game.adaptationSpeed === 'medium' ? 'bg-accent/10 text-accent-foreground' :
+                        game.totalPulls === 0 ? 'bg-muted/30 text-muted-foreground' :
+                        speed === 'slow' ? 'bg-success/10 text-success' :
+                        speed === 'medium' ? 'bg-accent/10 text-accent-foreground' :
                         'bg-primary/10 text-primary'
                       }`}>
-                        {game.adaptationSpeed === 'slow' ? '✅ Stable' : game.adaptationSpeed === 'medium' ? '🔄 Adapting' : '🔍 Learning'}
+                        {game.totalPulls === 0 ? '⏳ No data' : speed === 'slow' ? '✅ Stable' : speed === 'medium' ? '🔄 Adapting' : '🔍 Learning'}
                       </span>
                     </div>
 
@@ -230,28 +260,28 @@ const AIInsightsDashboard = () => {
                       <div>
                         <div className="flex justify-between text-xs mb-1">
                           <span className="text-muted-foreground">Level</span>
-                          <span className="font-medium text-foreground">{game.currentLevel}/{game.maxLevel}</span>
+                          <span className="font-medium text-foreground">{game.currentLevel}/25</span>
                         </div>
-                        <Progress value={(game.currentLevel / game.maxLevel) * 100} className="h-1.5" />
+                        <Progress value={(game.currentLevel / 25) * 100} className="h-1.5" />
                       </div>
 
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div className="p-2 bg-muted/30 rounded-lg">
                           <p className="text-xs text-muted-foreground">Skill</p>
-                          <p className="text-sm font-bold text-foreground">{Math.round(game.skillLevel * 100)}%</p>
+                          <p className="text-sm font-bold text-foreground">{clampedSkill}%</p>
                         </div>
                         <div className="p-2 bg-muted/30 rounded-lg">
                           <p className="text-xs text-muted-foreground">ε-Rate</p>
                           <p className="text-sm font-bold text-foreground">{Math.round(game.explorationRate * 100)}%</p>
                         </div>
                         <div className="p-2 bg-muted/30 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Reward</p>
-                          <p className="text-sm font-bold text-foreground">{game.avgReward.toFixed(1)}</p>
+                          <p className="text-xs text-muted-foreground">Pulls</p>
+                          <p className="text-sm font-bold text-foreground">{game.totalPulls}</p>
                         </div>
                       </div>
 
                       <p className="text-xs text-muted-foreground text-center">
-                        {game.totalPulls} AI decisions made
+                        {game.totalPulls === 0 ? 'Play this game to start AI adaptation' : `${game.totalPulls} AI decision${game.totalPulls !== 1 ? 's' : ''} made`}
                       </p>
                     </div>
                   </CardContent>
@@ -263,53 +293,42 @@ const AIInsightsDashboard = () => {
 
         <TabsContent value="learning" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Learning Curve */}
+            {/* Exploration rates bar chart */}
             <Card className="glass-card p-6">
               <CardHeader className="p-0 pb-4">
-                <CardTitle className="text-lg">AI Learning Curve</CardTitle>
+                <CardTitle className="text-lg">Exploration Rate (ε) by Game</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={learningCurve}>
+                  <BarChart data={gameBandits.map(g => ({ name: g.name.split(' ')[0], epsilon: Math.round(g.explorationRate * 100), pulls: g.totalPulls }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="session" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                    <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} angle={-30} textAnchor="end" height={60} />
+                    <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} domain={[0, 35]} label={{ value: 'ε %', position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }} />
                     <Tooltip
-                      contentStyle={{
-                        background: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                        color: 'hsl(var(--foreground))',
-                      }}
+                      contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }}
+                      formatter={(value: number) => [`${value}%`, 'Exploration Rate']}
                     />
-                    <Legend />
-                    <Line type="monotone" dataKey="skillLevel" stroke="hsl(var(--primary))" name="Skill Level %" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="exploration" stroke="hsl(var(--accent))" name="Exploration %" strokeWidth={2} dot={false} />
-                  </LineChart>
+                    <Bar dataKey="epsilon" fill="hsl(var(--primary))" name="ε %" radius={[4, 4, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
 
-            {/* Reward Distribution */}
+            {/* Skill vs Pulls scatter-like bar */}
             <Card className="glass-card p-6">
               <CardHeader className="p-0 pb-4">
-                <CardTitle className="text-lg">Reward Distribution by Game</CardTitle>
+                <CardTitle className="text-lg">Skill Level vs Training Volume</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={gameBandits.map(g => ({ name: g.name.split(' ')[0], reward: g.avgReward, pulls: g.totalPulls }))}>
+                  <BarChart data={gameBandits.map(g => ({ name: g.name.split(' ')[0], skill: Math.min(100, Math.round(g.skillLevel * 100)), pulls: g.totalPulls }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} angle={-30} textAnchor="end" height={60} />
                     <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
-                    <Tooltip
-                      contentStyle={{
-                        background: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                        color: 'hsl(var(--foreground))',
-                      }}
-                    />
-                    <Bar dataKey="reward" fill="hsl(var(--primary))" name="Avg Reward" radius={[4, 4, 0, 0]} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }} />
+                    <Legend />
+                    <Bar dataKey="skill" fill="hsl(var(--primary))" name="Skill %" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="pulls" fill="hsl(var(--accent))" name="Total Pulls" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
