@@ -7,12 +7,18 @@ import Analytics from '@/pages/Analytics';
 import Articles from '@/pages/Articles';
 import AIInsightsDashboard from '@/pages/AIInsightsDashboard';
 import DailyChallengePage from '@/pages/DailyChallengePage';
+import Achievements from '@/pages/Achievements';
+import GameHistoryPage from '@/pages/GameHistory';
+import AchievementToast from '@/components/AchievementToast';
 import MemoryMatchingGame from '@/components/Games/MemoryMatchingGame';
+import { checkGameAchievements, addGameHistory, type Achievement } from '@/lib/achievements';
+import { soundManager } from '@/lib/soundManager';
 
 const AppLayout = () => {
   const { user } = useAuth();
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [currentGame, setCurrentGame] = useState<string | null>(null);
+  const [achievementQueue, setAchievementQueue] = useState<Achievement[]>([]);
 
   useEffect(() => {
     const handleStartGame = (event: any) => {
@@ -23,7 +29,54 @@ const AppLayout = () => {
     return () => window.removeEventListener('startGame', handleStartGame);
   }, []);
 
+  const GAME_META: Record<string, { name: string; domain: string }> = {
+    'memory-matching': { name: 'Memory Matching', domain: 'memory' },
+    'attention-focus': { name: 'Attention Focus', domain: 'attention' },
+    'reaction-speed': { name: 'Reaction Speed', domain: 'processing' },
+    'pattern-recognition': { name: 'Pattern Recognition', domain: 'executive' },
+    'word-memory': { name: 'Word Memory', domain: 'memory' },
+    'math-challenge': { name: 'Math Challenge', domain: 'executive' },
+    'visual-processing': { name: 'Visual Processing', domain: 'processing' },
+    'executive-function': { name: 'Executive Function', domain: 'executive' },
+    'spatial-navigation': { name: 'Spatial Navigation', domain: 'memory' },
+    'processing-speed': { name: 'Processing Speed', domain: 'processing' },
+    'audio-memory': { name: 'Audio Memory', domain: 'memory' },
+    'tower-of-hanoi': { name: 'Tower of Hanoi', domain: 'executive' },
+    'tower-hanoi': { name: 'Tower of Hanoi', domain: 'executive' },
+  };
+
   const handleGameComplete = (score: number) => {
+    const gameId = currentGame || '';
+    const meta = GAME_META[gameId] || { name: gameId, domain: 'memory' };
+
+    // Record history
+    addGameHistory({
+      gameId,
+      gameName: meta.name,
+      score,
+      level: 1,
+      duration: 60,
+      completed: true,
+      domain: meta.domain,
+      difficulty: 'Adaptive',
+    });
+
+    // Check achievements
+    const newlyUnlocked = checkGameAchievements({
+      gameId,
+      score,
+      level: 1,
+      duration: 60,
+      completed: true,
+    });
+
+    if (newlyUnlocked.length > 0) {
+      soundManager.achievement();
+      setAchievementQueue(prev => [...prev, ...newlyUnlocked]);
+    } else {
+      soundManager.victory();
+    }
+
     console.log(`Game completed with score: ${score}`);
     setCurrentGame(null);
     setCurrentPage('games');
@@ -196,6 +249,10 @@ const AppLayout = () => {
         return <DailyChallengePage />;
       case 'ai-dashboard':
         return <AIInsightsDashboard />;
+      case 'achievements':
+        return <Achievements />;
+      case 'history':
+        return <GameHistoryPage />;
       case 'analytics':
         return <Analytics />;
       case 'articles':
@@ -211,6 +268,14 @@ const AppLayout = () => {
       <main className="container mx-auto px-4 lg:px-6 py-8">
         {renderPage()}
       </main>
+
+      {/* Achievement Toasts */}
+      {achievementQueue.length > 0 && (
+        <AchievementToast
+          achievement={achievementQueue[0]}
+          onDismiss={() => setAchievementQueue(prev => prev.slice(1))}
+        />
+      )}
     </div>
   );
 };

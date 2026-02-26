@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2, LogOut, Cpu, Target } from 'lucide-react';
+import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2, LogOut, Cpu, Target, Trophy, Clock, Volume2, VolumeX } from 'lucide-react';
+import { soundManager } from '@/lib/soundManager';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 
@@ -11,15 +12,23 @@ interface HeaderProps {
 const Header = ({ currentPage, onNavigate }: HeaderProps) => {
   const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled);
 
   const navigationItems = [
     { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
     { id: 'games', label: 'Brain Games', icon: Gamepad2 },
     { id: 'daily-challenge', label: 'Daily', icon: Target },
+    { id: 'achievements', label: 'Trophies', icon: Trophy },
+    { id: 'history', label: 'History', icon: Clock },
     { id: 'ai-dashboard', label: 'AI Lab', icon: Cpu },
     { id: 'analytics', label: 'Progress', icon: BarChart3 },
     { id: 'articles', label: 'Brain Health', icon: BookOpen },
   ];
+
+  const toggleSound = () => {
+    const enabled = soundManager.toggle();
+    setSoundEnabled(enabled);
+  };
 
   return (
     <header className="glass-card-strong sticky top-0 z-50 w-full">
@@ -37,7 +46,7 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-2">
+          <nav className="hidden lg:flex items-center space-x-1">
             {navigationItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -46,7 +55,7 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
                   variant={currentPage === item.id ? "default" : "ghost"}
                   onClick={() => onNavigate(item.id)}
                   className={`
-                    px-4 py-2 h-auto flex items-center space-x-2 rounded-lg transition-all duration-200
+                    px-3 py-2 h-auto flex items-center space-x-1.5 rounded-lg transition-all duration-200 text-sm
                     ${currentPage === item.id 
                       ? 'bg-gradient-to-r from-primary to-primary-dark text-primary-foreground shadow-lg' 
                       : 'hover:bg-hover text-foreground'
@@ -61,7 +70,10 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
           </nav>
 
           {/* User Profile */}
-          <div className="hidden md:flex items-center space-x-3">
+          <div className="hidden lg:flex items-center space-x-3">
+            <Button variant="ghost" size="sm" onClick={toggleSound} className="text-muted-foreground" title={soundEnabled ? 'Mute sounds' : 'Enable sounds'}>
+              {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </Button>
             <div className="text-right">
               <p className="text-sm font-medium text-foreground">{user?.name || 'Guest'}</p>
               <p className="text-xs text-muted-foreground">Welcome back!</p>
@@ -83,7 +95,7 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
           <Button
             variant="ghost"
             size="sm"
-            className="md:hidden"
+            className="lg:hidden"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
             {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -92,7 +104,7 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
 
         {/* Mobile Navigation */}
         {isMobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-border">
+          <div className="lg:hidden py-4 border-t border-border">
             <nav className="space-y-2">
               {navigationItems.map((item) => {
                 const Icon = item.icon;
