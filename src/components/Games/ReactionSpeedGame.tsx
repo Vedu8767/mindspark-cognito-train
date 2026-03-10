@@ -38,7 +38,7 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
   const reactionTimesRef = useRef<number[]>([]);
   const bestReactionTimeRef = useRef(Infinity);
   const startTimeRef = useRef<number>(0);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Get time of day for context
   const getTimeOfDay = (): 'morning' | 'afternoon' | 'evening' => {
