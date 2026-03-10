@@ -38,10 +38,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const checkAuthState = async () => {
       try {
-        // TODO: Replace with actual Supabase session check
         const savedUser = localStorage.getItem('mci_user');
         if (savedUser) {
           setUser(JSON.parse(savedUser));
+        } else {
+          // Auto-login as guest for testing
+          const guestUser: User = {
+            id: 'guest-001',
+            email: 'guest@mci-demo.com',
+            name: 'Guest User',
+            createdAt: new Date().toISOString(),
+          };
+          setUser(guestUser);
+          localStorage.setItem('mci_user', JSON.stringify(guestUser));
         }
       } catch (error) {
         console.error('Error checking auth state:', error);
