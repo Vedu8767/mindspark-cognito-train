@@ -2,7 +2,11 @@ import { Users, AlertTriangle, TrendingUp, Brain, ArrowRight, Activity } from 'l
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { mockPatients, mockAlerts } from '@/lib/mockDoctorData';
+import { mockPatients, mockAlerts, generateCohortTrend } from '@/lib/mockDoctorData';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar,
+} from 'recharts';
 
 interface Props {
   onViewPatient: (id: string) => void;
@@ -15,6 +19,14 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
   const declining = mockPatients.filter(p => p.recentTrend === 'declining').length;
   const unreadAlerts = mockAlerts.filter(a => !a.read).length;
   const avgScore = Math.round(mockPatients.reduce((s, p) => s + p.overallScore, 0) / totalPatients);
+
+  const cohortTrend = generateCohortTrend();
+
+  const patientScores = mockPatients.map(p => ({
+    name: p.name.split(' ')[1] || p.name,
+    score: p.overallScore,
+    trend: p.recentTrend,
+  }));
 
   const stats = [
     { label: 'Total Patients', value: totalPatients, icon: Users, color: 'from-primary to-primary-dark' },
@@ -48,6 +60,43 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Charts */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Cohort Score Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={cohortTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="week" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis domain={[40, 100]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                <Line type="monotone" dataKey="avgScore" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: 'hsl(var(--primary))', r: 3 }} name="Avg Score" />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Patient Scores</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={patientScores}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                <Bar dataKey="score" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Score" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

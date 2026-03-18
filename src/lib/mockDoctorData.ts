@@ -57,6 +57,24 @@ export interface TrainingPlanGame {
   sessionsPerWeek: number;
 }
 
+export interface SessionRecord {
+  date: string;
+  game: string;
+  domain: string;
+  score: number;
+  duration: number; // minutes
+  difficulty: string;
+}
+
+export interface WeeklyScore {
+  week: string;
+  memory: number;
+  attention: number;
+  executive: number;
+  processing: number;
+  overall: number;
+}
+
 export const AVAILABLE_GAMES = [
   { id: 'memory-matching', name: 'Memory Matching', domain: 'memory' },
   { id: 'word-memory', name: 'Word Memory', domain: 'memory' },
@@ -163,3 +181,72 @@ export const mockTrainingPlans: TrainingPlan[] = [
     ],
   },
 ];
+
+// Generate mock weekly scores for a patient (8 weeks of history)
+export const generateWeeklyScores = (patientId: string): WeeklyScore[] => {
+  const patient = mockPatients.find(p => p.id === patientId);
+  if (!patient) return [];
+
+  const weeks: WeeklyScore[] = [];
+  const baseScores = { ...patient.domainScores };
+  const trendMultiplier = patient.recentTrend === 'improving' ? 1 : patient.recentTrend === 'declining' ? -1 : 0;
+
+  for (let i = 7; i >= 0; i--) {
+    const weekDate = new Date();
+    weekDate.setDate(weekDate.getDate() - i * 7);
+    const offset = (7 - i) * trendMultiplier * 2;
+    const jitter = () => Math.round((Math.random() - 0.5) * 4);
+
+    const memory = Math.min(100, Math.max(10, baseScores.memory - (7 - i) * trendMultiplier * 2 + offset + jitter()));
+    const attention = Math.min(100, Math.max(10, baseScores.attention - (7 - i) * trendMultiplier * 1.5 + offset + jitter()));
+    const executive = Math.min(100, Math.max(10, baseScores.executive - (7 - i) * trendMultiplier * 1.8 + offset + jitter()));
+    const processing = Math.min(100, Math.max(10, baseScores.processing - (7 - i) * trendMultiplier * 1.6 + offset + jitter()));
+
+    weeks.push({
+      week: `W${i === 0 ? 'Now' : `-${i}`}`,
+      memory, attention, executive, processing,
+      overall: Math.round((memory + attention + executive + processing) / 4),
+    });
+  }
+  return weeks;
+};
+
+// Generate mock session records for a patient
+export const generateSessionHistory = (patientId: string): SessionRecord[] => {
+  const patient = mockPatients.find(p => p.id === patientId);
+  if (!patient) return [];
+
+  const games = AVAILABLE_GAMES;
+  const sessions: SessionRecord[] = [];
+  const numSessions = Math.min(patient.totalSessions, 20); // Last 20 sessions
+
+  for (let i = 0; i < numSessions; i++) {
+    const date = new Date();
+    date.setDate(date.getDate() - Math.floor(i * 1.5));
+    const game = games[Math.floor(Math.random() * games.length)];
+    sessions.push({
+      date: date.toISOString().split('T')[0],
+      game: game.name,
+      domain: game.domain,
+      score: Math.round(patient.overallScore + (Math.random() - 0.5) * 30),
+      duration: Math.round(5 + Math.random() * 15),
+      difficulty: ['easy', 'medium', 'hard', 'adaptive'][Math.floor(Math.random() * 4)],
+    });
+  }
+  return sessions.sort((a, b) => b.date.localeCompare(a.date));
+};
+
+// Generate cohort weekly trend data
+export const generateCohortTrend = (): { week: string; avgScore: number; activePlayers: number }[] => {
+  const data = [];
+  for (let i = 7; i >= 0; i--) {
+    const weekDate = new Date();
+    weekDate.setDate(weekDate.getDate() - i * 7);
+    data.push({
+      week: `W${i === 0 ? 'Now' : `-${i}`}`,
+      avgScore: Math.round(60 + Math.random() * 15 + (7 - i) * 0.8),
+      activePlayers: Math.round(3 + Math.random() * 3),
+    });
+  }
+  return data;
+};

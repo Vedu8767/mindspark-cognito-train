@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { Bell, AlertTriangle, CheckCircle, Clock, Activity } from 'lucide-react';
+import { Bell, AlertTriangle, CheckCircle, Clock, Activity, Trash2, Eye } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { mockAlerts, type PatientAlert } from '@/lib/mockDoctorData';
+
+interface Props {
+  onViewPatient?: (id: string) => void;
+}
 
 const iconMap: Record<string, any> = {
   decline: AlertTriangle,
@@ -12,12 +16,13 @@ const iconMap: Record<string, any> = {
   milestone: CheckCircle,
 };
 
-const DoctorAlerts = () => {
+const DoctorAlerts = ({ onViewPatient }: Props) => {
   const [alerts, setAlerts] = useState<PatientAlert[]>(mockAlerts);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   const markRead = (id: string) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
   const markAllRead = () => setAlerts(prev => prev.map(a => ({ ...a, read: true })));
+  const deleteAlert = (id: string) => setAlerts(prev => prev.filter(a => a.id !== id));
 
   const displayed = filter === 'unread' ? alerts.filter(a => !a.read) : alerts;
   const unreadCount = alerts.filter(a => !a.read).length;
@@ -58,11 +63,21 @@ const DoctorAlerts = () => {
                   <p className="text-sm text-muted-foreground">{alert.message}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">{new Date(alert.timestamp).toLocaleString()}</p>
                 </div>
-                {!alert.read && (
-                  <Button variant="ghost" size="sm" className="shrink-0 text-xs" onClick={() => markRead(alert.id)}>
-                    Mark read
+                <div className="flex items-center gap-1 shrink-0">
+                  {onViewPatient && (
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-primary" onClick={() => onViewPatient(alert.patientId)} title="View patient">
+                      <Eye className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {!alert.read && (
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => markRead(alert.id)} title="Mark read">
+                      <CheckCircle className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAlert(alert.id)} title="Delete">
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-                )}
+                </div>
               </CardContent>
             </Card>
           );

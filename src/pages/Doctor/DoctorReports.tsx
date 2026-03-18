@@ -1,8 +1,13 @@
-import { Brain, Download, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, Users, Download } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { mockPatients } from '@/lib/mockDoctorData';
+import { Button } from '@/components/ui/button';
+import { mockPatients, generateCohortTrend } from '@/lib/mockDoctorData';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+} from 'recharts';
 
 const DoctorReports = () => {
   const avgScores = {
@@ -16,39 +21,140 @@ const DoctorReports = () => {
   const improvingCount = mockPatients.filter(p => p.recentTrend === 'improving').length;
   const decliningCount = mockPatients.filter(p => p.recentTrend === 'declining').length;
 
+  const cohortTrend = generateCohortTrend();
+
+  const patientBarData = mockPatients.map(p => ({
+    name: p.name.split(' ')[1] || p.name,
+    memory: p.domainScores.memory,
+    attention: p.domainScores.attention,
+    executive: p.domainScores.executive,
+    processing: p.domainScores.processing,
+    overall: p.overallScore,
+  }));
+
+  const radarData = [
+    { domain: 'Memory', score: avgScores.memory },
+    { domain: 'Attention', score: avgScores.attention },
+    { domain: 'Executive', score: avgScores.executive },
+    { domain: 'Processing', score: avgScores.processing },
+  ];
+
+  const conditionDist = [
+    { name: 'Mild', value: mockPatients.filter(p => p.condition === 'mild').length },
+    { name: 'Moderate', value: mockPatients.filter(p => p.condition === 'moderate').length },
+    { name: 'Severe', value: mockPatients.filter(p => p.condition === 'severe').length },
+  ];
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Reports & Analytics</h1>
-        <p className="text-muted-foreground mt-1">Aggregate performance across all patients</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Reports & Analytics</h1>
+          <p className="text-muted-foreground mt-1">Aggregate performance across all patients</p>
+        </div>
       </div>
 
-      {/* Aggregate Scores */}
+      {/* Summary stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Cohort Avg', value: `${overallAvg}%`, icon: Brain, gradient: 'from-primary to-primary-dark' },
+          { label: 'Improving', value: improvingCount, icon: TrendingUp, gradient: 'from-[hsl(var(--success))] to-[hsl(var(--success-light))]' },
+          { label: 'Declining', value: decliningCount, icon: TrendingDown, gradient: 'from-[hsl(var(--destructive))] to-[hsl(0,65%,50%)]' },
+          { label: 'Total Patients', value: mockPatients.length, icon: Users, gradient: 'from-[hsl(var(--secondary))] to-[hsl(var(--secondary-light))]' },
+        ].map(s => (
+          <Card key={s.label} className="border-border">
+            <CardContent className="p-5">
+              <div className={`p-2 rounded-lg bg-gradient-to-br ${s.gradient} w-fit mb-2`}>
+                <s.icon className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <p className="text-2xl font-bold text-foreground">{s.value}</p>
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Charts row */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Cohort Trend Line Chart */}
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Cohort Score Trend (8 Weeks)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={cohortTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="week" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis domain={[40, 100]} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+                <Line type="monotone" dataKey="avgScore" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: 'hsl(var(--primary))', r: 4 }} name="Avg Score" />
+                <Line type="monotone" dataKey="activePlayers" stroke="hsl(var(--success))" strokeWidth={2} dot={{ fill: 'hsl(var(--success))', r: 3 }} name="Active" />
+                <Legend />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Radar Chart */}
+        <Card className="border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Cohort Domain Strengths</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <RadarChart data={radarData}>
+                <PolarGrid stroke="hsl(var(--border))" />
+                <PolarAngleAxis dataKey="domain" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} />
+                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <Radar dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Patient Comparison Bar Chart */}
       <Card className="border-border">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Cohort Average Scores</CardTitle>
+          <CardTitle className="text-base">Patient Score Comparison</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            {(['memory', 'attention', 'executive', 'processing'] as const).map(d => (
-              <div key={d}>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="capitalize font-medium text-foreground">{d}</span>
-                  <span className="font-bold text-foreground">{avgScores[d]}%</span>
-                </div>
-                <Progress value={avgScores[d]} className="h-3" />
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t border-border flex flex-wrap gap-6 text-sm">
-            <div><span className="text-muted-foreground">Overall Avg:</span> <strong className="text-foreground">{overallAvg}%</strong></div>
-            <div className="flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5 text-[hsl(var(--success))]" /><span className="text-foreground">{improvingCount} improving</span></div>
-            <div className="flex items-center gap-1"><TrendingDown className="h-3.5 w-3.5 text-destructive" /><span className="text-foreground">{decliningCount} declining</span></div>
-          </div>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={patientBarData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+              <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+              <Legend />
+              <Bar dataKey="memory" fill="hsl(var(--memory))" radius={[2, 2, 0, 0]} name="Memory" />
+              <Bar dataKey="attention" fill="hsl(var(--attention))" radius={[2, 2, 0, 0]} name="Attention" />
+              <Bar dataKey="executive" fill="hsl(var(--executive))" radius={[2, 2, 0, 0]} name="Executive" />
+              <Bar dataKey="processing" fill="hsl(var(--processing))" radius={[2, 2, 0, 0]} name="Processing" />
+            </BarChart>
+          </ResponsiveContainer>
         </CardContent>
       </Card>
 
-      {/* Per-patient breakdown */}
+      {/* Condition Distribution */}
+      <Card className="border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Condition Distribution</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={180}>
+            <BarChart data={conditionDist} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis type="number" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} width={80} />
+              <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
+              <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Patients" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Per-patient breakdown table */}
       <Card className="border-border">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Patient Breakdown</CardTitle>
