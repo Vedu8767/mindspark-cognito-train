@@ -16,13 +16,14 @@ interface Props {
 }
 
 const PatientProfile = ({ patientId, onBack }: Props) => {
+  const weeklyScores = useMemo(() => generateWeeklyScores(patientId), [patientId]);
+  const sessions = useMemo(() => generateSessionHistory(patientId), [patientId]);
+
   const patient = mockPatients.find(p => p.id === patientId);
   if (!patient) return <div className="text-center py-12 text-muted-foreground">Patient not found.</div>;
 
   const plan = mockTrainingPlans.find(p => p.patientId === patientId);
   const alerts = mockAlerts.filter(a => a.patientId === patientId);
-  const weeklyScores = useMemo(() => generateWeeklyScores(patientId), [patientId]);
-  const sessions = useMemo(() => generateSessionHistory(patientId), [patientId]);
 
   const ageDiff = patient.cognitiveAge - patient.age;
   const ageLabel = ageDiff <= -3 ? 'younger' : ageDiff >= 3 ? 'older' : 'age-appropriate';
