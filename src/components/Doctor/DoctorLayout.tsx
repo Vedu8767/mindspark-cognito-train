@@ -46,7 +46,7 @@ const DoctorLayout = () => {
       case 'patient-profile': return selectedPatientId ? <PatientProfile patientId={selectedPatientId} onBack={handleBackToPatients} /> : <PatientList onViewPatient={handleViewPatient} />;
       case 'prescriptions': return <TrainingPrescriptions />;
       case 'reports': return <DoctorReports />;
-      case 'alerts': return <DoctorAlerts />;
+      case 'alerts': return <DoctorAlerts onViewPatient={handleViewPatient} />;
       default: return <DoctorOverview onViewPatient={handleViewPatient} onNavigate={setCurrentPage} />;
     }
   };
