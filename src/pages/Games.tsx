@@ -125,7 +125,7 @@ const Games = () => {
       estimatedTime: 5,
     },
     {
-      id: 'tower-hanoi',
+      id: 'tower-of-hanoi',
       title: 'Tower of Hanoi',
       description: 'Classic strategy puzzle game. Enhances problem-solving and planning abilities.',
       domain: 'executive' as const,
