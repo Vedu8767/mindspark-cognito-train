@@ -1,5 +1,5 @@
 // Achievement & Rewards System
-
+import { recordGameSession } from '@/lib/gameSessionService';
 export interface Achievement {
   id: string;
   title: string;
@@ -197,9 +197,21 @@ export function addGameHistory(entry: Omit<GameHistoryEntry, 'id' | 'timestamp'>
     timestamp: new Date().toISOString(),
   };
   history.push(newEntry);
-  // Keep last 500 entries
   if (history.length > 500) history.splice(0, history.length - 500);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+
+  // Also save to database (fire-and-forget)
+  recordGameSession({
+    gameId: entry.gameId,
+    gameName: entry.gameName,
+    domain: entry.domain,
+    score: entry.score,
+    level: entry.level,
+    duration: entry.duration,
+    completed: entry.completed,
+    difficulty: entry.difficulty,
+  }).catch(() => {});
+
   return newEntry;
 }
 
