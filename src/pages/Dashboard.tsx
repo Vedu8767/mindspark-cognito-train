@@ -10,7 +10,7 @@ import CognitiveAgeCard from '@/components/Dashboard/CognitiveAgeCard';
 import ProgressHeatmap from '@/components/Dashboard/ProgressHeatmap';
 
 const Dashboard = () => {
-  const { user } = useAuth();
+  const { profile } = useAuth();
 
   // Mock data - in a real app this would come from your backend
   const statsData = {
@@ -39,7 +39,7 @@ const Dashboard = () => {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground">
-              {getGreeting()}, {user?.name || 'Guest'}!
+              {getGreeting()}, {profile?.name || 'Guest'}!
             </h1>
             <p className="text-lg text-muted-foreground">
               Ready to enhance your cognitive abilities today?

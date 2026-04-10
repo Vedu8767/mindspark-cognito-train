@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 const Header = ({ currentPage, onNavigate }: HeaderProps) => {
-  const { user, logout } = useAuth();
+  const { profile, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled);
 
@@ -75,7 +75,7 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
               {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
             <div className="text-right">
-              <p className="text-sm font-medium text-foreground">{user?.name || 'Guest'}</p>
+              <p className="text-sm font-medium text-foreground">{profile?.name || 'Guest'}</p>
               <p className="text-xs text-muted-foreground">Welcome back!</p>
             </div>
             <div className="h-10 w-10 rounded-full bg-gradient-to-br from-accent to-accent-light flex items-center justify-center">
@@ -139,7 +139,7 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
                     <User className="h-6 w-6 text-accent-foreground" />
                   </div>
                   <div>
-                    <p className="text-base font-medium text-foreground">{user?.name || 'Guest'}</p>
+                    <p className="text-base font-medium text-foreground">{profile?.name || 'Guest'}</p>
                     <p className="text-sm text-muted-foreground">Welcome back!</p>
                   </div>
                 </div>
