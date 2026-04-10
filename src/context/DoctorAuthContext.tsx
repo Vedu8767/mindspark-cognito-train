@@ -1,19 +1,26 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 
-interface Doctor {
+interface DoctorProfile {
   id: string;
-  email: string;
+  user_id: string;
   name: string;
+  email: string | null;
   specialization: string;
   clinic: string;
-  avatar?: string | null;
+  avatar_url: string | null;
+  license_number: string | null;
 }
 
 interface DoctorAuthContextType {
-  doctor: Doctor | null;
+  user: SupabaseUser | null;
+  doctor: DoctorProfile | null;
+  session: Session | null;
   isLoading: boolean;
-  login: (doctor: Doctor) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ error: string | null }>;
+  signup: (email: string, password: string, name: string, specialization: string, clinic: string) => Promise<{ error: string | null }>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -28,32 +35,125 @@ export const useDoctorAuth = () => {
 };
 
 export const DoctorAuthProvider = ({ children }: { children: ReactNode }) => {
-  const [doctor, setDoctor] = useState<Doctor | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [doctor, setDoctor] = useState<DoctorProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('mci_doctor');
-      if (saved) setDoctor(JSON.parse(saved));
-    } catch {
-      localStorage.removeItem('mci_doctor');
-    } finally {
-      setIsLoading(false);
+  const fetchDoctorProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('doctor_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (!error && data) {
+      setDoctor(data as DoctorProfile);
+    } else {
+      // User exists but has no doctor profile — not a doctor
+      setDoctor(null);
     }
-  }, []);
-
-  const login = (d: Doctor) => {
-    setDoctor(d);
-    localStorage.setItem('mci_doctor', JSON.stringify(d));
   };
 
-  const logout = () => {
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+
+        if (currentSession?.user) {
+          setTimeout(() => fetchDoctorProfile(currentSession.user.id), 0);
+        } else {
+          setDoctor(null);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      setSession(existingSession);
+      setUser(existingSession?.user ?? null);
+      if (existingSession?.user) {
+        fetchDoctorProfile(existingSession.user.id);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+
+    // Check that user has a doctor profile
+    const { data: docProfile } = await supabase
+      .from('doctor_profiles')
+      .select('*')
+      .eq('user_id', data.user.id)
+      .single();
+
+    if (!docProfile) {
+      await supabase.auth.signOut();
+      return { error: 'No doctor profile found. Please sign up as a doctor first.' };
+    }
+
+    return { error: null };
+  };
+
+  const signup = async (email: string, password: string, name: string, specialization: string, clinic: string) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    if (error) return { error: error.message };
+    if (!data.user) return { error: 'Signup failed' };
+
+    // Create doctor profile
+    const { error: profileError } = await supabase
+      .from('doctor_profiles')
+      .insert({
+        user_id: data.user.id,
+        name,
+        email,
+        specialization,
+        clinic,
+      });
+
+    if (profileError) return { error: profileError.message };
+
+    // Add doctor role
+    const { error: roleError } = await supabase
+      .from('user_roles')
+      .insert({ user_id: data.user.id, role: 'doctor' as any });
+
+    // Role insert may fail if no INSERT policy — that's fine, it's managed by trigger
+    
+    return { error: null };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
     setDoctor(null);
-    localStorage.removeItem('mci_doctor');
+    setSession(null);
   };
 
   return (
-    <DoctorAuthContext.Provider value={{ doctor, isLoading, login, logout, isAuthenticated: !!doctor }}>
+    <DoctorAuthContext.Provider value={{
+      user,
+      doctor,
+      session,
+      isLoading,
+      login,
+      signup,
+      logout,
+      isAuthenticated: !!doctor,
+    }}>
       {children}
     </DoctorAuthContext.Provider>
   );

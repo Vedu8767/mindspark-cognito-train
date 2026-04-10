@@ -1,18 +1,27 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
 
-interface User {
+interface UserProfile {
   id: string;
-  email: string;
+  user_id: string;
+  email: string | null;
   name: string;
-  avatar?: string | null;
-  createdAt: string;
+  avatar_url: string | null;
+  current_streak: number;
+  longest_streak: number;
+  cognitive_age: number | null;
+  created_at: string;
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: SupabaseUser | null;
+  profile: UserProfile | null;
+  session: Session | null;
   isLoading: boolean;
-  login: (user: User) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ error: string | null }>;
+  signup: (email: string, password: string, name: string) => Promise<{ error: string | null }>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -26,64 +35,89 @@ export const useAuth = () => {
   return context;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing session on app load
+  const fetchProfile = async (userId: string) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    
+    if (!error && data) {
+      setProfile(data as UserProfile);
+    }
+  };
+
   useEffect(() => {
-    const checkAuthState = async () => {
-      try {
-        const savedUser = localStorage.getItem('mci_user');
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
+    // Set up auth state listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          // Defer profile fetch to avoid deadlock
+          setTimeout(() => fetchProfile(currentSession.user.id), 0);
         } else {
-          // Auto-login as guest for testing
-          const guestUser: User = {
-            id: 'guest-001',
-            email: 'guest@mci-demo.com',
-            name: 'Guest User',
-            createdAt: new Date().toISOString(),
-          };
-          setUser(guestUser);
-          localStorage.setItem('mci_user', JSON.stringify(guestUser));
+          setProfile(null);
         }
-      } catch (error) {
-        console.error('Error checking auth state:', error);
-        localStorage.removeItem('mci_user');
-      } finally {
         setIsLoading(false);
       }
-    };
+    );
 
-    checkAuthState();
+    // THEN check existing session
+    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      setSession(existingSession);
+      setUser(existingSession?.user ?? null);
+      if (existingSession?.user) {
+        fetchProfile(existingSession.user.id);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('mci_user', JSON.stringify(userData));
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error?.message ?? null };
   };
 
-  const logout = () => {
+  const signup = async (email: string, password: string, name: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name },
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    return { error: error?.message ?? null };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('mci_user');
-    // TODO: Add actual Supabase logout logic here
-  };
-
-  const value: AuthContextType = {
-    user,
-    isLoading,
-    login,
-    logout,
-    isAuthenticated: !!user,
+    setProfile(null);
+    setSession(null);
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      user,
+      profile,
+      session,
+      isLoading,
+      login,
+      signup,
+      logout,
+      isAuthenticated: !!session,
+    }}>
       {children}
     </AuthContext.Provider>
   );

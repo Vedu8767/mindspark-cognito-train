@@ -5,42 +5,27 @@ import AuthLayout from '@/components/Auth/AuthLayout';
 import LoginForm from '@/components/Auth/LoginForm';
 import SignupForm from '@/components/Auth/SignupForm';
 import { useToast } from '@/hooks/use-toast';
-
-interface AuthProps {
-  onAuthSuccess: (user: any) => void;
-}
+import { useAuth } from '@/context/AuthContext';
 
 type Role = 'patient' | 'doctor' | null;
 
-const Auth = ({ onAuthSuccess }: AuthProps) => {
+const Auth = () => {
   const [role, setRole] = useState<Role>(null);
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { login, signup } = useAuth();
 
   const handleLogin = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const mockUser = {
-        id: '1',
-        email,
-        name: 'Mrs. Sharma',
-        avatar: null,
-        createdAt: new Date().toISOString(),
-      };
-      toast({
-        title: "Welcome back!",
-        description: "You've successfully signed in to your account.",
-      });
-      onAuthSuccess(mockUser);
-    } catch (error) {
-      toast({
-        title: "Sign in failed",
-        description: "Please check your credentials and try again.",
-        variant: "destructive",
-      });
+      const { error } = await login(email, password);
+      if (error) {
+        toast({ title: "Sign in failed", description: error, variant: "destructive" });
+      } else {
+        toast({ title: "Welcome back!", description: "You've successfully signed in." });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -55,37 +40,23 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
   }) => {
     setIsLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      const mockUser = {
-        id: '1',
-        email: data.email,
-        name: data.name,
-        avatar: null,
-        createdAt: new Date().toISOString(),
-      };
-      toast({
-        title: "Account created!",
-        description: "Welcome to MCI Cognitive Care. Your journey to better brain health starts now.",
-      });
-      onAuthSuccess(mockUser);
-    } catch (error) {
-      toast({
-        title: "Sign up failed",
-        description: "There was an error creating your account. Please try again.",
-        variant: "destructive",
-      });
+      const { error } = await signup(data.email, data.password, data.name);
+      if (error) {
+        toast({ title: "Sign up failed", description: error, variant: "destructive" });
+      } else {
+        toast({
+          title: "Account created!",
+          description: "Welcome to MCI Cognitive Care. Your journey starts now.",
+        });
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Role selection screen
   if (!role) {
     return (
-      <AuthLayout
-        title="Welcome"
-        subtitle="Select your role to continue"
-      >
+      <AuthLayout title="Welcome" subtitle="Select your role to continue">
         <div className="space-y-4">
           <button
             onClick={() => setRole('patient')}
@@ -121,7 +92,7 @@ const Auth = ({ onAuthSuccess }: AuthProps) => {
     <AuthLayout
       title={isLogin ? "Welcome Back" : "Create Account"}
       subtitle={
-        isLogin 
+        isLogin
           ? "Sign in to continue your cognitive training journey"
           : "Join thousands improving their brain health with AI-powered training"
       }
