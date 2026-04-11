@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { Search, Filter, TrendingUp, TrendingDown, Minus, Brain } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, TrendingUp, TrendingDown, Minus, Brain, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { mockPatients, type Patient } from '@/lib/mockDoctorData';
+import { useDoctorAuth } from '@/context/DoctorAuthContext';
+import { fetchPatients, getDoctorProfileId, type PatientWithStats } from '@/lib/doctorDataService';
 
 interface Props {
   onViewPatient: (id: string) => void;
@@ -18,29 +18,49 @@ const TrendIcon = ({ trend }: { trend: string }) => {
   return <Minus className="h-3.5 w-3.5 text-muted-foreground" />;
 };
 
-const riskColor = (r: string) =>
+const riskColor = (r: string | null) =>
   r === 'high' ? 'destructive' : r === 'medium' ? 'secondary' : 'outline';
 
 const PatientList = ({ onViewPatient }: Props) => {
+  const [patients, setPatients] = useState<PatientWithStats[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [conditionFilter, setConditionFilter] = useState('all');
   const [riskFilter, setRiskFilter] = useState('all');
 
-  const filtered = mockPatients.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.email.toLowerCase().includes(search.toLowerCase());
+  useEffect(() => {
+    (async () => {
+      const docId = await getDoctorProfileId();
+      if (docId) {
+        const data = await fetchPatients(docId);
+        setPatients(data);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const filtered = patients.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || (p.email || '').toLowerCase().includes(search.toLowerCase());
     const matchesCondition = conditionFilter === 'all' || p.condition === conditionFilter;
     const matchesRisk = riskFilter === 'all' || p.riskLevel === riskFilter;
     return matchesSearch && matchesCondition && matchesRisk;
   });
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground">Patients</h1>
-        <p className="text-muted-foreground mt-1">{mockPatients.length} patients enrolled</p>
+        <p className="text-muted-foreground mt-1">{patients.length} patients enrolled</p>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -66,28 +86,24 @@ const PatientList = ({ onViewPatient }: Props) => {
         </Select>
       </div>
 
-      {/* Patient Cards */}
       <div className="grid gap-4">
         {filtered.map(p => (
           <Card key={p.id} className="border-border hover:shadow-md transition-shadow cursor-pointer" onClick={() => onViewPatient(p.id)}>
             <CardContent className="p-5">
               <div className="flex items-center gap-4">
-                {/* Avatar */}
                 <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center shrink-0">
                   <span className="text-primary-foreground font-bold text-lg">{p.name.charAt(0)}</span>
                 </div>
-
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold text-foreground">{p.name}</h3>
-                    <Badge variant={riskColor(p.riskLevel) as any} className="text-[10px]">{p.riskLevel} risk</Badge>
-                    <Badge variant="outline" className="text-[10px]">{p.condition}</Badge>
+                    <Badge variant={riskColor(p.riskLevel) as any} className="text-[10px]">{p.riskLevel || 'unknown'} risk</Badge>
+                    {p.condition && <Badge variant="outline" className="text-[10px]">{p.condition}</Badge>}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">Age {p.age} • Last active: {new Date(p.lastActive).toLocaleDateString()}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {p.age ? `Age ${p.age} • ` : ''}Last active: {p.lastActive ? new Date(p.lastActive).toLocaleDateString() : 'Never'}
+                  </p>
                 </div>
-
-                {/* Score + Trend */}
                 <div className="hidden sm:flex items-center gap-6">
                   <div className="text-center">
                     <div className="flex items-center gap-1">
@@ -97,9 +113,7 @@ const PatientList = ({ onViewPatient }: Props) => {
                     <p className="text-[10px] text-muted-foreground">Overall</p>
                   </div>
                   <div className="text-center">
-                    <div className="flex items-center gap-1">
-                      <span className="text-lg font-bold text-foreground">{p.cognitiveAge}</span>
-                    </div>
+                    <span className="text-lg font-bold text-foreground">{p.cognitiveAge ?? '—'}</span>
                     <p className="text-[10px] text-muted-foreground">Cog. Age</p>
                   </div>
                   <div className="text-center">
@@ -111,8 +125,6 @@ const PatientList = ({ onViewPatient }: Props) => {
                   </div>
                 </div>
               </div>
-
-              {/* Domain bars */}
               <div className="grid grid-cols-4 gap-3 mt-4">
                 {(['memory', 'attention', 'executive', 'processing'] as const).map(d => (
                   <div key={d}>
@@ -128,7 +140,9 @@ const PatientList = ({ onViewPatient }: Props) => {
           </Card>
         ))}
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">No patients match your filters.</div>
+          <div className="text-center py-12 text-muted-foreground">
+            {patients.length === 0 ? 'No patients assigned yet. Assign patients to see them here.' : 'No patients match your filters.'}
+          </div>
         )}
       </div>
     </div>

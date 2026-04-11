@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Plus, ClipboardList, Trash2, Pause, Play, CheckCircle, Edit } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect } from 'react';
+import { Plus, ClipboardList, Trash2, Pause, Play, CheckCircle, Edit, Loader2 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -8,13 +8,28 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { mockTrainingPlans, mockPatients, AVAILABLE_GAMES, type TrainingPlan, type TrainingPlanGame } from '@/lib/mockDoctorData';
+import { AVAILABLE_GAMES } from '@/lib/mockDoctorData';
 import { useToast } from '@/hooks/use-toast';
+import {
+  getDoctorProfileId, fetchPatients, fetchTrainingPlans, createTrainingPlan,
+  updatePlanStatus, deleteTrainingPlan,
+  type PatientWithStats, type PlanRow, type PlanGameRow,
+} from '@/lib/doctorDataService';
+
+interface GameFormItem {
+  gameId: string;
+  gameName: string;
+  domain: string;
+  difficulty: string;
+  sessionsPerWeek: number;
+}
 
 const TrainingPrescriptions = () => {
-  const [plans, setPlans] = useState<TrainingPlan[]>(mockTrainingPlans);
+  const [plans, setPlans] = useState<PlanRow[]>([]);
+  const [patients, setPatients] = useState<PatientWithStats[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [docId, setDocId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingPlan, setEditingPlan] = useState<TrainingPlan | null>(null);
   const { toast } = useToast();
 
   // Form state
@@ -22,24 +37,26 @@ const TrainingPrescriptions = () => {
   const [selectedPatient, setSelectedPatient] = useState('');
   const [frequency, setFrequency] = useState('');
   const [notes, setNotes] = useState('');
-  const [selectedGames, setSelectedGames] = useState<TrainingPlanGame[]>([]);
+  const [selectedGames, setSelectedGames] = useState<GameFormItem[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const id = await getDoctorProfileId();
+      setDocId(id);
+      if (id) {
+        const [p, pl] = await Promise.all([fetchPatients(id), fetchTrainingPlans(id)]);
+        setPatients(p);
+        setPlans(pl);
+      }
+      setLoading(false);
+    })();
+  }, []);
 
   const resetForm = () => {
     setPlanName(''); setSelectedPatient(''); setFrequency(''); setNotes(''); setSelectedGames([]);
-    setEditingPlan(null);
   };
 
   const openCreate = () => { resetForm(); setDialogOpen(true); };
-
-  const openEdit = (plan: TrainingPlan) => {
-    setEditingPlan(plan);
-    setPlanName(plan.name);
-    setSelectedPatient(plan.patientId);
-    setFrequency(plan.frequency);
-    setNotes(plan.notes || '');
-    setSelectedGames([...plan.games]);
-    setDialogOpen(true);
-  };
 
   const addGame = (gameId: string) => {
     const game = AVAILABLE_GAMES.find(g => g.id === gameId);
@@ -49,56 +66,55 @@ const TrainingPrescriptions = () => {
 
   const removeGame = (gameId: string) => setSelectedGames(prev => prev.filter(g => g.gameId !== gameId));
 
-  const updateGameSetting = (gameId: string, field: keyof TrainingPlanGame, value: any) => {
+  const updateGameSetting = (gameId: string, field: keyof GameFormItem, value: any) => {
     setSelectedGames(prev => prev.map(g => g.gameId === gameId ? { ...g, [field]: value } : g));
   };
 
-  const handleSave = () => {
-    if (!planName || !selectedPatient || selectedGames.length === 0) {
+  const handleSave = async () => {
+    if (!planName || !selectedPatient || selectedGames.length === 0 || !docId) {
       toast({ title: 'Missing fields', description: 'Fill in plan name, patient, and at least one game.', variant: 'destructive' });
       return;
     }
-    const patient = mockPatients.find(p => p.id === selectedPatient);
 
-    if (editingPlan) {
-      setPlans(prev => prev.map(p => p.id === editingPlan.id ? {
-        ...p, name: planName, patientId: selectedPatient, patientName: patient?.name || '',
-        frequency: frequency || '3 sessions/week', notes: notes || undefined, games: selectedGames,
-      } : p));
-      toast({ title: 'Plan updated', description: `"${planName}" has been updated.` });
-    } else {
-      const newPlan: TrainingPlan = {
-        id: `plan-${Date.now()}`, name: planName, patientId: selectedPatient,
-        patientName: patient?.name || '', frequency: frequency || '3 sessions/week',
-        startDate: new Date().toISOString().split('T')[0], status: 'active',
-        notes: notes || undefined, games: selectedGames,
-      };
-      setPlans(prev => [...prev, newPlan]);
-      toast({ title: 'Plan created', description: `"${planName}" assigned to ${patient?.name}` });
+    const { error } = await createTrainingPlan(docId, {
+      name: planName,
+      patientId: selectedPatient,
+      frequency: frequency || '3 sessions/week',
+      notes: notes || undefined,
+      games: selectedGames,
+    });
+
+    if (error) {
+      toast({ title: 'Error', description: error, variant: 'destructive' });
+      return;
     }
+
+    // Refresh plans
+    const refreshed = await fetchTrainingPlans(docId);
+    setPlans(refreshed);
+    toast({ title: 'Plan created', description: `"${planName}" has been created.` });
     setDialogOpen(false);
     resetForm();
   };
 
-  const togglePause = (planId: string) => {
-    setPlans(prev => prev.map(p => {
-      if (p.id !== planId) return p;
-      const newStatus = p.status === 'active' ? 'paused' : 'active';
-      toast({ title: newStatus === 'paused' ? 'Plan paused' : 'Plan resumed', description: `"${p.name}" is now ${newStatus}.` });
-      return { ...p, status: newStatus };
-    }));
-  };
-
-  const completePlan = (planId: string) => {
-    setPlans(prev => prev.map(p => {
-      if (p.id !== planId) return p;
-      toast({ title: 'Plan completed', description: `"${p.name}" marked as completed.` });
-      return { ...p, status: 'completed', endDate: new Date().toISOString().split('T')[0] };
-    }));
-  };
-
-  const deletePlan = (planId: string) => {
+  const togglePause = async (planId: string) => {
     const plan = plans.find(p => p.id === planId);
+    if (!plan) return;
+    const newStatus = plan.status === 'active' ? 'paused' : 'active';
+    await updatePlanStatus(planId, newStatus);
+    setPlans(prev => prev.map(p => p.id === planId ? { ...p, status: newStatus } : p));
+    toast({ title: newStatus === 'paused' ? 'Plan paused' : 'Plan resumed' });
+  };
+
+  const completePlan = async (planId: string) => {
+    await updatePlanStatus(planId, 'completed', new Date().toISOString().split('T')[0]);
+    setPlans(prev => prev.map(p => p.id === planId ? { ...p, status: 'completed', endDate: new Date().toISOString().split('T')[0] } : p));
+    toast({ title: 'Plan completed' });
+  };
+
+  const handleDelete = async (planId: string) => {
+    const plan = plans.find(p => p.id === planId);
+    await deleteTrainingPlan(planId);
     setPlans(prev => prev.filter(p => p.id !== planId));
     toast({ title: 'Plan deleted', description: `"${plan?.name}" has been removed.` });
   };
@@ -108,6 +124,10 @@ const TrainingPrescriptions = () => {
     if (status === 'paused') return 'secondary';
     return 'outline';
   };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -122,7 +142,7 @@ const TrainingPrescriptions = () => {
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingPlan ? 'Edit Training Plan' : 'Create Training Plan'}</DialogTitle>
+              <DialogTitle>Create Training Plan</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
               <div className="space-y-2">
@@ -133,7 +153,7 @@ const TrainingPrescriptions = () => {
                 <Label>Patient</Label>
                 <Select value={selectedPatient} onValueChange={setSelectedPatient}>
                   <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
-                  <SelectContent>{mockPatients.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{patients.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
@@ -179,14 +199,13 @@ const TrainingPrescriptions = () => {
                 <Textarea placeholder="Clinical notes for this plan..." value={notes} onChange={e => setNotes(e.target.value)} rows={2} />
               </div>
               <Button onClick={handleSave} className="w-full bg-gradient-to-r from-primary to-primary-dark text-primary-foreground">
-                {editingPlan ? 'Update Plan' : 'Create Plan'}
+                Create Plan
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Plans list */}
       <div className="grid gap-4">
         {plans.map(plan => (
           <Card key={plan.id} className="border-border">
@@ -206,9 +225,6 @@ const TrainingPrescriptions = () => {
                 <div className="flex items-center gap-1 shrink-0">
                   {plan.status !== 'completed' && (
                     <>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => openEdit(plan)} title="Edit">
-                        <Edit className="h-3.5 w-3.5" />
-                      </Button>
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => togglePause(plan.id)} title={plan.status === 'paused' ? 'Resume' : 'Pause'}>
                         {plan.status === 'paused' ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
                       </Button>
@@ -217,7 +233,7 @@ const TrainingPrescriptions = () => {
                       </Button>
                     </>
                   )}
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => deletePlan(plan.id)} title="Delete">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(plan.id)} title="Delete">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -225,7 +241,7 @@ const TrainingPrescriptions = () => {
               {plan.notes && <p className="text-xs text-muted-foreground italic mb-3">"{plan.notes}"</p>}
               <div className="flex flex-wrap gap-2">
                 {plan.games.map(g => (
-                  <Badge key={g.gameId} variant="secondary" className="text-xs">
+                  <Badge key={g.id} variant="secondary" className="text-xs">
                     {g.gameName} • {g.difficulty} • {g.sessionsPerWeek}x/wk
                   </Badge>
                 ))}

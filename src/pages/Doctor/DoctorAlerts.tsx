@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Bell, AlertTriangle, CheckCircle, Clock, Activity, Trash2, Eye } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bell, AlertTriangle, CheckCircle, Clock, Activity, Trash2, Eye, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { mockAlerts, type PatientAlert } from '@/lib/mockDoctorData';
+import { getDoctorProfileId, fetchAlerts, markAlertRead, markAllAlertsRead, deleteAlert, type AlertRow } from '@/lib/doctorDataService';
 
 interface Props {
   onViewPatient?: (id: string) => void;
@@ -17,15 +17,46 @@ const iconMap: Record<string, any> = {
 };
 
 const DoctorAlerts = ({ onViewPatient }: Props) => {
-  const [alerts, setAlerts] = useState<PatientAlert[]>(mockAlerts);
+  const [alerts, setAlerts] = useState<AlertRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [docId, setDocId] = useState<string | null>(null);
 
-  const markRead = (id: string) => setAlerts(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
-  const markAllRead = () => setAlerts(prev => prev.map(a => ({ ...a, read: true })));
-  const deleteAlert = (id: string) => setAlerts(prev => prev.filter(a => a.id !== id));
+  useEffect(() => {
+    (async () => {
+      const id = await getDoctorProfileId();
+      setDocId(id);
+      if (id) {
+        const data = await fetchAlerts(id);
+        setAlerts(data);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const handleMarkRead = async (id: string) => {
+    await markAlertRead(id);
+    setAlerts(prev => prev.map(a => a.id === id ? { ...a, read: true } : a));
+  };
+
+  const handleMarkAllRead = async () => {
+    if (docId) {
+      await markAllAlertsRead(docId);
+      setAlerts(prev => prev.map(a => ({ ...a, read: true })));
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteAlert(id);
+    setAlerts(prev => prev.filter(a => a.id !== id));
+  };
 
   const displayed = filter === 'unread' ? alerts.filter(a => !a.read) : alerts;
   const unreadCount = alerts.filter(a => !a.read).length;
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -37,7 +68,7 @@ const DoctorAlerts = ({ onViewPatient }: Props) => {
         <div className="flex gap-2">
           <Button variant={filter === 'all' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('all')}>All</Button>
           <Button variant={filter === 'unread' ? 'default' : 'outline'} size="sm" onClick={() => setFilter('unread')}>Unread ({unreadCount})</Button>
-          {unreadCount > 0 && <Button variant="ghost" size="sm" onClick={markAllRead}>Mark all read</Button>}
+          {unreadCount > 0 && <Button variant="ghost" size="sm" onClick={handleMarkAllRead}>Mark all read</Button>}
         </div>
       </div>
 
@@ -70,11 +101,11 @@ const DoctorAlerts = ({ onViewPatient }: Props) => {
                     </Button>
                   )}
                   {!alert.read && (
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => markRead(alert.id)} title="Mark read">
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => handleMarkRead(alert.id)} title="Mark read">
                       <CheckCircle className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => deleteAlert(alert.id)} title="Delete">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive" onClick={() => handleDelete(alert.id)} title="Delete">
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>

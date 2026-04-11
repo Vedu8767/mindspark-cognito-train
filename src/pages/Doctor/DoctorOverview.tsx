@@ -1,11 +1,11 @@
-import { Users, AlertTriangle, TrendingUp, Brain, ArrowRight, Activity } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, AlertTriangle, TrendingUp, Brain, ArrowRight, Activity, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { mockPatients, mockAlerts, generateCohortTrend } from '@/lib/mockDoctorData';
+import { getDoctorProfileId, fetchPatients, fetchAlerts, type PatientWithStats, type AlertRow } from '@/lib/doctorDataService';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  BarChart, Bar,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 
 interface Props {
@@ -14,18 +14,35 @@ interface Props {
 }
 
 const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
-  const totalPatients = mockPatients.length;
-  const improving = mockPatients.filter(p => p.recentTrend === 'improving').length;
-  const declining = mockPatients.filter(p => p.recentTrend === 'declining').length;
-  const unreadAlerts = mockAlerts.filter(a => !a.read).length;
-  const avgScore = Math.round(mockPatients.reduce((s, p) => s + p.overallScore, 0) / totalPatients);
+  const [patients, setPatients] = useState<PatientWithStats[]>([]);
+  const [alerts, setAlerts] = useState<AlertRow[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const cohortTrend = generateCohortTrend();
+  useEffect(() => {
+    (async () => {
+      const docId = await getDoctorProfileId();
+      if (docId) {
+        const [p, a] = await Promise.all([fetchPatients(docId), fetchAlerts(docId)]);
+        setPatients(p);
+        setAlerts(a);
+      }
+      setLoading(false);
+    })();
+  }, []);
 
-  const patientScores = mockPatients.map(p => ({
-    name: p.name.split(' ')[1] || p.name,
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  }
+
+  const totalPatients = patients.length;
+  const improving = patients.filter(p => p.recentTrend === 'improving').length;
+  const declining = patients.filter(p => p.recentTrend === 'declining').length;
+  const unreadAlerts = alerts.filter(a => !a.read).length;
+  const avgScore = totalPatients > 0 ? Math.round(patients.reduce((s, p) => s + p.overallScore, 0) / totalPatients) : 0;
+
+  const patientScores = patients.map(p => ({
+    name: p.name.split(' ').pop() || p.name,
     score: p.overallScore,
-    trend: p.recentTrend,
   }));
 
   const stats = [
@@ -35,8 +52,8 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
     { label: 'Needs Attention', value: declining, icon: AlertTriangle, color: 'from-[hsl(var(--destructive))] to-[hsl(0,65%,50%)]' },
   ];
 
-  const recentAlerts = mockAlerts.filter(a => !a.read).slice(0, 3);
-  const atRiskPatients = mockPatients.filter(p => p.riskLevel === 'high');
+  const recentAlerts = alerts.filter(a => !a.read).slice(0, 3);
+  const atRiskPatients = patients.filter(p => p.riskLevel === 'high');
 
   return (
     <div className="space-y-8">
@@ -45,7 +62,6 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
         <p className="text-muted-foreground mt-1">Overview of your patients and their cognitive health</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(s => (
           <Card key={s.label} className="border-border">
@@ -62,25 +78,7 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
         ))}
       </div>
 
-      {/* Charts */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Cohort Score Trend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={cohortTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="week" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <YAxis domain={[40, 100]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
-                <Line type="monotone" dataKey="avgScore" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: 'hsl(var(--primary))', r: 3 }} name="Avg Score" />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
+      {patientScores.length > 0 && (
         <Card className="border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Patient Scores</CardTitle>
@@ -97,10 +95,9 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-      </div>
+      )}
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Alerts */}
         <Card className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-base font-semibold">Recent Alerts</CardTitle>
@@ -126,7 +123,6 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
           </CardContent>
         </Card>
 
-        {/* At-Risk Patients */}
         <Card className="border-border">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold">High-Risk Patients</CardTitle>
@@ -145,7 +141,7 @@ const DoctorOverview = ({ onViewPatient, onNavigate }: Props) => {
                     <p className="text-xs text-muted-foreground">Score: {p.overallScore}% • {p.recentTrend}</p>
                   </div>
                   <Badge variant={p.recentTrend === 'declining' ? 'destructive' : 'secondary'} className="text-[10px] shrink-0">
-                    {p.condition}
+                    {p.condition || 'N/A'}
                   </Badge>
                 </button>
               ))

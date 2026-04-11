@@ -1,13 +1,15 @@
-import { useMemo } from 'react';
-import { ArrowLeft, Brain, Calendar, TrendingUp, TrendingDown, Minus, Activity, Target, Flame, Clock, Gamepad2 } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { ArrowLeft, Brain, TrendingUp, TrendingDown, Minus, Activity, Target, Flame, Clock, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { mockPatients, mockTrainingPlans, mockAlerts, generateWeeklyScores, generateSessionHistory } from '@/lib/mockDoctorData';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  getDoctorProfileId, fetchPatients, fetchTrainingPlans, fetchAlerts, fetchPatientSessions,
+  type PatientWithStats, type PlanRow, type AlertRow,
+} from '@/lib/doctorDataService';
+import {
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from 'recharts';
 
 interface Props {
@@ -16,16 +18,40 @@ interface Props {
 }
 
 const PatientProfile = ({ patientId, onBack }: Props) => {
-  const weeklyScores = useMemo(() => generateWeeklyScores(patientId), [patientId]);
-  const sessions = useMemo(() => generateSessionHistory(patientId), [patientId]);
+  const [patient, setPatient] = useState<PatientWithStats | null>(null);
+  const [plan, setPlan] = useState<PlanRow | null>(null);
+  const [alerts, setAlerts] = useState<AlertRow[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const patient = mockPatients.find(p => p.id === patientId);
+  useEffect(() => {
+    (async () => {
+      const docId = await getDoctorProfileId();
+      if (!docId) { setLoading(false); return; }
+
+      const [patients, plans, allAlerts, patientSessions] = await Promise.all([
+        fetchPatients(docId),
+        fetchTrainingPlans(docId),
+        fetchAlerts(docId),
+        fetchPatientSessions(patientId),
+      ]);
+
+      const found = patients.find(p => p.id === patientId);
+      setPatient(found || null);
+      setPlan(plans.find(p => p.patientId === patientId) || null);
+      setAlerts(allAlerts.filter(a => a.patientId === patientId));
+      setSessions(patientSessions);
+      setLoading(false);
+    })();
+  }, [patientId]);
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
+  }
+
   if (!patient) return <div className="text-center py-12 text-muted-foreground">Patient not found.</div>;
 
-  const plan = mockTrainingPlans.find(p => p.patientId === patientId);
-  const alerts = mockAlerts.filter(a => a.patientId === patientId);
-
-  const ageDiff = patient.cognitiveAge - patient.age;
+  const ageDiff = (patient.cognitiveAge ?? 0) - (patient.age ?? 0);
   const ageLabel = ageDiff <= -3 ? 'younger' : ageDiff >= 3 ? 'older' : 'age-appropriate';
 
   const radarData = [
@@ -37,7 +63,6 @@ const PatientProfile = ({ patientId, onBack }: Props) => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={onBack} className="shrink-0">
           <ArrowLeft className="h-4 w-4 mr-1" /> Back
@@ -45,18 +70,19 @@ const PatientProfile = ({ patientId, onBack }: Props) => {
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl font-bold text-foreground">{patient.name}</h1>
-            <Badge variant="outline">{patient.condition}</Badge>
-            <Badge variant={patient.riskLevel === 'high' ? 'destructive' : 'secondary'} className="text-[10px]">{patient.riskLevel} risk</Badge>
+            {patient.condition && <Badge variant="outline">{patient.condition}</Badge>}
+            <Badge variant={patient.riskLevel === 'high' ? 'destructive' : 'secondary'} className="text-[10px]">{patient.riskLevel || 'unknown'} risk</Badge>
           </div>
-          <p className="text-sm text-muted-foreground mt-0.5">Age {patient.age} • Enrolled {new Date(patient.enrolledDate).toLocaleDateString()} • {patient.email}</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {patient.age ? `Age ${patient.age} • ` : ''}Enrolled {new Date(patient.enrolledDate).toLocaleDateString()}{patient.email ? ` • ${patient.email}` : ''}
+          </p>
         </div>
       </div>
 
-      {/* Key Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
           { label: 'Overall Score', value: `${patient.overallScore}%`, icon: Brain, gradient: 'from-primary to-primary-dark' },
-          { label: 'Cognitive Age', value: `${patient.cognitiveAge}`, icon: Activity, gradient: ageDiff < 0 ? 'from-[hsl(var(--success))] to-[hsl(var(--success-light))]' : 'from-[hsl(var(--accent))] to-[hsl(var(--accent-light))]' },
+          { label: 'Cognitive Age', value: `${patient.cognitiveAge ?? '—'}`, icon: Activity, gradient: ageDiff < 0 ? 'from-[hsl(var(--success))] to-[hsl(var(--success-light))]' : 'from-[hsl(var(--accent))] to-[hsl(var(--accent-light))]' },
           { label: 'Streak', value: `${patient.currentStreak} days`, icon: Flame, gradient: 'from-[hsl(var(--accent))] to-[hsl(var(--accent-light))]' },
           { label: 'Sessions', value: `${patient.totalSessions}`, icon: Target, gradient: 'from-[hsl(var(--secondary))] to-[hsl(var(--secondary-light))]' },
           { label: 'Trend', value: patient.recentTrend, icon: patient.recentTrend === 'improving' ? TrendingUp : patient.recentTrend === 'declining' ? TrendingDown : Minus, gradient: patient.recentTrend === 'improving' ? 'from-[hsl(var(--success))] to-[hsl(var(--success-light))]' : 'from-[hsl(var(--destructive))] to-[hsl(0,65%,50%)]' },
@@ -73,57 +99,32 @@ const PatientProfile = ({ patientId, onBack }: Props) => {
         ))}
       </div>
 
-      {/* Charts row */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Score Trend Line Chart */}
-        <Card className="border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Score Trend (8 Weeks)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={weeklyScores}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="week" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
-                <Legend />
-                <Line type="monotone" dataKey="memory" stroke="hsl(var(--memory))" strokeWidth={2} dot={{ r: 3 }} name="Memory" />
-                <Line type="monotone" dataKey="attention" stroke="hsl(var(--attention))" strokeWidth={2} dot={{ r: 3 }} name="Attention" />
-                <Line type="monotone" dataKey="executive" stroke="hsl(var(--executive))" strokeWidth={2} dot={{ r: 3 }} name="Executive" />
-                <Line type="monotone" dataKey="processing" stroke="hsl(var(--processing))" strokeWidth={2} dot={{ r: 3 }} name="Processing" />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+      {/* Radar */}
+      <Card className="border-border">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Domain Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={250}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="hsl(var(--border))" />
+              <PolarAngleAxis dataKey="domain" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} />
+              <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <Radar dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
-        {/* Radar Chart */}
-        <Card className="border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Domain Profile</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="hsl(var(--border))" />
-                <PolarAngleAxis dataKey="domain" tick={{ fontSize: 12, fill: 'hsl(var(--foreground))' }} />
-                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                <Radar dataKey="score" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.25} strokeWidth={2} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Cognitive Age Analysis */}
+      {/* Cognitive Age + Domain Bars */}
       <Card className="border-border">
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Cognitive Age Analysis</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            {patient.name}'s cognitive age is <strong>{patient.cognitiveAge}</strong> compared to chronological age <strong>{patient.age}</strong>.
-            Brain is performing <strong>{ageLabel}</strong> than expected ({Math.abs(ageDiff)} year{Math.abs(ageDiff) !== 1 ? 's' : ''} {ageDiff < 0 ? 'younger' : 'older'}).
+            {patient.name}'s cognitive age is <strong>{patient.cognitiveAge ?? '—'}</strong> compared to chronological age <strong>{patient.age ?? '—'}</strong>.
+            {patient.age && patient.cognitiveAge ? ` Brain is performing ${ageLabel} than expected (${Math.abs(ageDiff)} year${Math.abs(ageDiff) !== 1 ? 's' : ''} ${ageDiff < 0 ? 'younger' : 'older'}).` : ''}
           </p>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {(['memory', 'attention', 'executive', 'processing'] as const).map(d => (
@@ -142,9 +143,7 @@ const PatientProfile = ({ patientId, onBack }: Props) => {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Training Plan */}
         <Card className="border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Assigned Training Plan</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Assigned Training Plan</CardTitle></CardHeader>
           <CardContent>
             {plan ? (
               <div className="space-y-3">
@@ -156,7 +155,7 @@ const PatientProfile = ({ patientId, onBack }: Props) => {
                 {plan.notes && <p className="text-xs text-muted-foreground italic">"{plan.notes}"</p>}
                 <div className="space-y-2 mt-3">
                   {plan.games.map(g => (
-                    <div key={g.gameId} className="flex items-center justify-between p-2 rounded bg-muted/50 text-xs">
+                    <div key={g.id} className="flex items-center justify-between p-2 rounded bg-muted/50 text-xs">
                       <span className="font-medium text-foreground">{g.gameName}</span>
                       <span className="text-muted-foreground">{g.difficulty} • {g.sessionsPerWeek}x/wk</span>
                     </div>
@@ -171,9 +170,7 @@ const PatientProfile = ({ patientId, onBack }: Props) => {
 
         {/* Patient Alerts */}
         <Card className="border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Patient Alerts</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Patient Alerts</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {alerts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No alerts for this patient.</p>
@@ -196,37 +193,40 @@ const PatientProfile = ({ patientId, onBack }: Props) => {
       <Card className="border-border">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Clock className="h-4 w-4 text-primary" />
-            Recent Session History
+            <Clock className="h-4 w-4 text-primary" /> Recent Session History
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground text-left">
-                  <th className="py-2.5 pr-4 font-medium">Date</th>
-                  <th className="py-2.5 px-3 font-medium">Game</th>
-                  <th className="py-2.5 px-3 font-medium">Domain</th>
-                  <th className="py-2.5 px-3 font-medium">Score</th>
-                  <th className="py-2.5 px-3 font-medium">Duration</th>
-                  <th className="py-2.5 px-3 font-medium">Difficulty</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.slice(0, 15).map((s, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-2.5 pr-4 text-foreground">{new Date(s.date).toLocaleDateString()}</td>
-                    <td className="py-2.5 px-3 text-foreground font-medium">{s.game}</td>
-                    <td className="py-2.5 px-3"><Badge variant="outline" className="text-[10px] capitalize">{s.domain}</Badge></td>
-                    <td className="py-2.5 px-3 text-foreground font-semibold">{Math.min(100, Math.max(0, s.score))}%</td>
-                    <td className="py-2.5 px-3 text-muted-foreground">{s.duration} min</td>
-                    <td className="py-2.5 px-3"><Badge variant="secondary" className="text-[10px] capitalize">{s.difficulty}</Badge></td>
+          {sessions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No sessions recorded yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground text-left">
+                    <th className="py-2.5 pr-4 font-medium">Date</th>
+                    <th className="py-2.5 px-3 font-medium">Game</th>
+                    <th className="py-2.5 px-3 font-medium">Domain</th>
+                    <th className="py-2.5 px-3 font-medium">Score</th>
+                    <th className="py-2.5 px-3 font-medium">Duration</th>
+                    <th className="py-2.5 px-3 font-medium">Difficulty</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {sessions.slice(0, 15).map((s: any, i: number) => (
+                    <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                      <td className="py-2.5 pr-4 text-foreground">{new Date(s.created_at).toLocaleDateString()}</td>
+                      <td className="py-2.5 px-3 text-foreground font-medium">{s.game_name}</td>
+                      <td className="py-2.5 px-3"><Badge variant="outline" className="text-[10px] capitalize">{s.domain}</Badge></td>
+                      <td className="py-2.5 px-3 text-foreground font-semibold">{s.score}</td>
+                      <td className="py-2.5 px-3 text-muted-foreground">{Math.round(s.duration / 60)} min</td>
+                      <td className="py-2.5 px-3"><Badge variant="secondary" className="text-[10px] capitalize">{s.difficulty}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
