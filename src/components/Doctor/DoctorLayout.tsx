@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDoctorAuth } from '@/context/DoctorAuthContext';
 import { Button } from '@/components/ui/button';
 import {
   Stethoscope, Users, ClipboardList, BarChart3, Bell, LayoutDashboard,
-  LogOut, Menu, X, User, ChevronRight,
+  LogOut, Menu, X, User,
 } from 'lucide-react';
 import DoctorOverview from '@/pages/Doctor/DoctorOverview';
 import PatientList from '@/pages/Doctor/PatientList';
@@ -11,7 +11,7 @@ import PatientProfile from '@/pages/Doctor/PatientProfile';
 import TrainingPrescriptions from '@/pages/Doctor/TrainingPrescriptions';
 import DoctorReports from '@/pages/Doctor/DoctorReports';
 import DoctorAlerts from '@/pages/Doctor/DoctorAlerts';
-import { mockAlerts } from '@/lib/mockDoctorData';
+import { getDoctorProfileId, fetchUnreadAlertCount } from '@/lib/doctorDataService';
 
 const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -26,8 +26,17 @@ const DoctorLayout = () => {
   const [currentPage, setCurrentPage] = useState('overview');
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
 
-  const unreadAlerts = mockAlerts.filter(a => !a.read).length;
+  useEffect(() => {
+    (async () => {
+      const docId = await getDoctorProfileId();
+      if (docId) {
+        const count = await fetchUnreadAlertCount(docId);
+        setUnreadAlerts(count);
+      }
+    })();
+  }, [currentPage]);
 
   const handleViewPatient = (patientId: string) => {
     setSelectedPatientId(patientId);
