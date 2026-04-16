@@ -1,26 +1,19 @@
-import { useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Clock, TrendingUp, Target, Trophy, Calendar, Gamepad2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getGameHistory, type GameHistoryEntry } from '@/lib/achievements';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
-
-const GAME_NAMES: Record<string, string> = {
-  'memory-matching': 'Memory Matching',
-  'attention-focus': 'Attention Focus',
-  'reaction-speed': 'Reaction Speed',
-  'pattern-recognition': 'Pattern Recognition',
-  'word-memory': 'Word Memory',
-  'math-challenge': 'Math Challenge',
-  'visual-processing': 'Visual Processing',
-  'executive-function': 'Executive Function',
-  'spatial-navigation': 'Spatial Navigation',
-  'processing-speed': 'Processing Speed',
-  'audio-memory': 'Audio Memory',
-  'tower-hanoi': 'Tower of Hanoi',
-};
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { getPatientSessions, type SessionEntry } from '@/lib/patientDataService';
 
 const GameHistory = () => {
-  const history = useMemo(() => getGameHistory().reverse(), []);
+  const [history, setHistory] = useState<SessionEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getPatientSessions(500).then(data => {
+      setHistory(data);
+      setLoading(false);
+    });
+  }, []);
 
   const stats = useMemo(() => {
     if (history.length === 0) return { totalSessions: 0, avgScore: 0, bestScore: 0, totalTime: 0, completionRate: 0 };
@@ -33,7 +26,6 @@ const GameHistory = () => {
     };
   }, [history]);
 
-  // Score trend (last 20 games)
   const scoreTrend = useMemo(() => {
     return history.slice(0, 20).reverse().map((h, i) => ({
       game: i + 1,
@@ -42,15 +34,25 @@ const GameHistory = () => {
     }));
   }, [history]);
 
-  // Games played breakdown
   const gameBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
-    history.forEach(h => { counts[h.gameId] = (counts[h.gameId] || 0) + 1; });
-    return Object.entries(counts).map(([id, count]) => ({
-      name: (GAME_NAMES[id] || id).split(' ')[0],
+    history.forEach(h => { counts[h.gameName] = (counts[h.gameName] || 0) + 1; });
+    return Object.entries(counts).map(([name, count]) => ({
+      name: name.split(' ')[0],
       sessions: count,
     })).sort((a, b) => b.sessions - a.sessions);
   }, [history]);
+
+  if (loading) {
+    return (
+      <div className="space-y-8 animate-fade-in">
+        <div className="glass-card-strong p-8 text-center">
+          <Gamepad2 className="h-16 w-16 text-muted-foreground mx-auto mb-4 animate-pulse" />
+          <h1 className="text-3xl font-bold text-foreground mb-2">Loading History...</h1>
+        </div>
+      </div>
+    );
+  }
 
   if (history.length === 0) {
     return (
@@ -66,7 +68,6 @@ const GameHistory = () => {
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Header */}
       <div className="glass-card-strong p-8">
         <div className="flex items-center space-x-4">
           <div className="p-3 bg-gradient-to-br from-primary to-primary-dark rounded-xl">
@@ -74,14 +75,11 @@ const GameHistory = () => {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-foreground">Game History</h1>
-            <p className="text-lg text-muted-foreground">
-              Detailed performance tracking across all sessions
-            </p>
+            <p className="text-lg text-muted-foreground">Detailed performance tracking across all sessions</p>
           </div>
         </div>
       </div>
 
-      {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         {[
           { label: 'Sessions', value: stats.totalSessions, icon: Gamepad2, color: 'primary' },
@@ -100,12 +98,9 @@ const GameHistory = () => {
         ))}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="glass-card p-6">
-          <CardHeader className="p-0 pb-4">
-            <CardTitle className="text-lg">Score Trend (Recent)</CardTitle>
-          </CardHeader>
+          <CardHeader className="p-0 pb-4"><CardTitle className="text-lg">Score Trend (Recent)</CardTitle></CardHeader>
           <CardContent className="p-0">
             <ResponsiveContainer width="100%" height={250}>
               <LineChart data={scoreTrend}>
@@ -120,9 +115,7 @@ const GameHistory = () => {
         </Card>
 
         <Card className="glass-card p-6">
-          <CardHeader className="p-0 pb-4">
-            <CardTitle className="text-lg">Games Played Breakdown</CardTitle>
-          </CardHeader>
+          <CardHeader className="p-0 pb-4"><CardTitle className="text-lg">Games Played Breakdown</CardTitle></CardHeader>
           <CardContent className="p-0">
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={gameBreakdown}>
@@ -137,7 +130,6 @@ const GameHistory = () => {
         </Card>
       </div>
 
-      {/* Session List */}
       <Card className="glass-card p-6">
         <CardHeader className="p-0 pb-4">
           <CardTitle className="text-lg flex items-center">
