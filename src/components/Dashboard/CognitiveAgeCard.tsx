@@ -2,25 +2,27 @@ import { Brain, TrendingUp, TrendingDown, Minus, ArrowDown, ArrowUp } from 'luci
 import { Card, CardContent } from '@/components/ui/card';
 import { calculateCognitiveAge, type DomainPerformance } from '@/lib/cognitiveAge';
 import { Progress } from '@/components/ui/progress';
+import type { DomainScores } from '@/lib/patientDataService';
 
 interface CognitiveAgeCardProps {
-  performance?: DomainPerformance;
+  domainScores?: DomainScores;
+  sessionsCompleted?: number;
   chronologicalAge?: number;
+  // Legacy props
+  performance?: DomainPerformance;
 }
 
-const CognitiveAgeCard = ({ performance, chronologicalAge = 35 }: CognitiveAgeCardProps) => {
-  // Default mock performance data
-  const defaultPerformance: DomainPerformance = {
-    memory: 85,
-    attention: 82,
-    executive: 91,
-    processing: 78,
+const CognitiveAgeCard = ({ domainScores, sessionsCompleted = 0, chronologicalAge = 35, performance }: CognitiveAgeCardProps) => {
+  const perf: DomainPerformance = performance || {
+    memory: domainScores?.memory || 0,
+    attention: domainScores?.attention || 0,
+    executive: domainScores?.executive || 0,
+    processing: domainScores?.processing || 0,
     reactionTime: 520,
     consistency: 0.75,
-    sessionsCompleted: 47,
+    sessionsCompleted,
   };
 
-  const perf = performance || defaultPerformance;
   const result = calculateCognitiveAge(perf, chronologicalAge);
 
   const ageColor = result.label === 'younger' ? 'text-success' :
@@ -42,6 +44,18 @@ const CognitiveAgeCard = ({ performance, chronologicalAge = 35 }: CognitiveAgeCa
     { name: 'Processing', age: result.domainAges.processing, score: perf.processing },
   ];
 
+  if (sessionsCompleted === 0 && !performance) {
+    return (
+      <Card className="glass-card-strong overflow-hidden">
+        <CardContent className="p-6 text-center">
+          <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">Cognitive Age</h3>
+          <p className="text-sm text-muted-foreground">Play some games to calculate your cognitive age!</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="glass-card-strong overflow-hidden">
       <div className={`h-1.5 bg-gradient-to-r ${ageBg}`} />
@@ -62,7 +76,6 @@ const CognitiveAgeCard = ({ performance, chronologicalAge = 35 }: CognitiveAgeCa
           </div>
         </div>
 
-        {/* Main Age Display */}
         <div className="text-center mb-6">
           <div className={`inline-flex items-center justify-center w-28 h-28 rounded-full bg-gradient-to-br ${ageBg}`}>
             <div className="text-center">
@@ -84,7 +97,6 @@ const CognitiveAgeCard = ({ performance, chronologicalAge = 35 }: CognitiveAgeCa
           </div>
         </div>
 
-        {/* Domain Breakdown */}
         <div className="space-y-3">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Domain Ages</p>
           {domains.map(d => (
@@ -100,7 +112,6 @@ const CognitiveAgeCard = ({ performance, chronologicalAge = 35 }: CognitiveAgeCa
           ))}
         </div>
 
-        {/* Strengths & Weaknesses */}
         <div className="grid grid-cols-2 gap-3 mt-4">
           <div className="p-3 bg-success/10 rounded-lg">
             <p className="text-xs font-medium text-success mb-1 flex items-center">
@@ -120,7 +131,6 @@ const CognitiveAgeCard = ({ performance, chronologicalAge = 35 }: CognitiveAgeCa
           </div>
         </div>
 
-        {/* Confidence */}
         <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
           <span>Confidence: {Math.round(result.confidence * 100)}%</span>
           <span>{perf.sessionsCompleted} sessions analyzed</span>

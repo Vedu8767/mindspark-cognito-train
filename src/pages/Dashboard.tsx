@@ -1,4 +1,5 @@
-import { Calendar, Flame, Star, Zap, Brain, Target, Trophy } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, Flame, Star, Brain, Target, Trophy } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProgressCard from '@/components/Dashboard/ProgressCard';
@@ -8,22 +9,29 @@ import ActivityFeed from '@/components/Dashboard/ActivityFeed';
 import QuickActions from '@/components/Dashboard/QuickActions';
 import CognitiveAgeCard from '@/components/Dashboard/CognitiveAgeCard';
 import ProgressHeatmap from '@/components/Dashboard/ProgressHeatmap';
+import {
+  getPatientSessions, computeStats, computeDomainScores,
+  computeChartData, computeRecentActivity, computeHeatmapData,
+  type SessionEntry, type PatientStats, type DomainScores, type ChartDataPoint, type ActivityItem,
+} from '@/lib/patientDataService';
 
 const Dashboard = () => {
   const { profile } = useAuth();
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - in a real app this would come from your backend
-  const statsData = {
-    totalSessions: 47,
-    averageScore: 84,
-    streakDays: 7,
-    improvement: 15,
-    weeklyProgress: {
-      sessions: { current: 5, target: 7 },
-      improvement: { current: 8, target: 10 },
-      newGames: { current: 2, target: 3 }
-    }
-  };
+  useEffect(() => {
+    getPatientSessions(500).then(data => {
+      setSessions(data);
+      setLoading(false);
+    });
+  }, []);
+
+  const stats = computeStats(sessions);
+  const domainScores = computeDomainScores(sessions);
+  const chartData = computeChartData(sessions);
+  const recentActivity = computeRecentActivity(sessions);
+  const heatmapData = computeHeatmapData(sessions);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -51,14 +59,14 @@ const Dashboard = () => {
                 <Flame className="h-8 w-8 text-white" />
               </div>
               <p className="text-sm text-muted-foreground">Current Streak</p>
-              <p className="text-xl font-bold text-success">{statsData.streakDays} days</p>
+              <p className="text-xl font-bold text-success">{stats.streakDays} days</p>
             </div>
             <div className="text-center">
               <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-accent to-accent/80 mb-2 shadow-lg">
                 <Star className="h-8 w-8 text-white" />
               </div>
-              <p className="text-sm text-muted-foreground">Total Badges</p>
-              <p className="text-xl font-bold text-accent-foreground">12</p>
+              <p className="text-sm text-muted-foreground">Total Sessions</p>
+              <p className="text-xl font-bold text-accent-foreground">{stats.totalSessions}</p>
             </div>
           </div>
         </div>
@@ -74,23 +82,16 @@ const Dashboard = () => {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          {/* Stats Overview */}
-          <StatsOverview data={statsData} />
-
-          {/* Cognitive Age + Chart */}
+          <StatsOverview data={stats} />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
-              <CognitiveChart />
+              <CognitiveChart data={chartData} />
             </div>
             <div className="space-y-6">
-              <CognitiveAgeCard />
+              <CognitiveAgeCard domainScores={domainScores} sessionsCompleted={stats.totalSessions} />
             </div>
           </div>
-
-          {/* Progress Heatmap */}
-          <ProgressHeatmap />
-
-          {/* Quick Actions */}
+          <ProgressHeatmap activityData={heatmapData} />
           <QuickActions />
         </TabsContent>
 
@@ -98,151 +99,81 @@ const Dashboard = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <ProgressCard
               title="Overall Score"
-              value="84%"
-              change="+5% this week"
+              value={`${stats.averageScore}%`}
+              change={`${stats.improvement >= 0 ? '+' : ''}${stats.improvement}% this week`}
               icon="trending"
               color="primary"
             />
             <ProgressCard
               title="Games Completed"
-              value="23"
-              change="+3 this week"
+              value={String(stats.totalSessions)}
+              change={`${stats.weeklyProgress.sessions.current} this week`}
               icon="target"
               color="success"
             />
             <ProgressCard
-              title="Processing Speed"
-              value="Advanced"
-              change="Level up!"
+              title="Completion Rate"
+              value={`${stats.completionRate}%`}
+              change="of games finished"
               icon="zap"
               color="accent"
             />
             <ProgressCard
-              title="Memory Score"
-              value="91%"
-              change="+8% this week"
+              title="Best Score"
+              value={`${stats.bestScore}%`}
+              change={stats.bestGameName}
               icon="award"
               color="secondary"
             />
           </div>
           
-          {/* Detailed Progress Tracking */}
           <div className="glass-card p-6">
             <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
               <Target className="h-5 w-5 mr-2 text-primary" />
-              Detailed Progress Breakdown
+              Domain Breakdown
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="p-4 bg-primary/10 rounded-lg">
-                  <h4 className="font-medium text-foreground mb-2">Memory Training</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Short-term Memory</span>
-                      <span className="text-success">92%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Working Memory</span>
-                      <span className="text-success">87%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Pattern Recognition</span>
-                      <span className="text-success">91%</span>
-                    </div>
+              {[
+                { name: 'Memory Training', key: 'memory' as const, color: 'primary' },
+                { name: 'Attention Skills', key: 'attention' as const, color: 'accent' },
+                { name: 'Executive Function', key: 'executive' as const, color: 'success' },
+                { name: 'Processing Speed', key: 'processing' as const, color: 'secondary' },
+              ].map(domain => (
+                <div key={domain.key} className={`p-4 bg-${domain.color}/10 rounded-lg`}>
+                  <h4 className="font-medium text-foreground mb-2">{domain.name}</h4>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-foreground">{domainScores[domain.key]}%</p>
+                    <p className="text-sm text-muted-foreground">average score</p>
                   </div>
                 </div>
-                <div className="p-4 bg-accent/10 rounded-lg">
-                  <h4 className="font-medium text-foreground mb-2">Attention Skills</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Sustained Attention</span>
-                      <span className="text-success">89%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Selective Attention</span>
-                      <span className="text-success">85%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Divided Attention</span>
-                      <span className="text-accent">78%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div className="p-4 bg-success/10 rounded-lg">
-                  <h4 className="font-medium text-foreground mb-2">Executive Function</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Problem Solving</span>
-                      <span className="text-success">94%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Planning</span>
-                      <span className="text-success">88%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Cognitive Flexibility</span>
-                      <span className="text-success">82%</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4 bg-secondary/10 rounded-lg">
-                  <h4 className="font-medium text-foreground mb-2">Processing Speed</h4>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Reaction Time</span>
-                      <span className="text-success">86%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Information Processing</span>
-                      <span className="text-success">90%</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span>Visual Processing</span>
-                      <span className="text-success">88%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ActivityFeed />
+            <ActivityFeed activities={recentActivity} />
             
-            {/* Training Calendar */}
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
                 <Calendar className="h-5 w-5 mr-2 text-primary" />
-                Training Calendar
+                Training Summary
               </h3>
-              <div className="grid grid-cols-7 gap-2 mb-4">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center text-xs font-medium text-muted-foreground p-2">
-                    {day}
-                  </div>
-                ))}
-                {Array.from({ length: 35 }, (_, i) => (
-                  <div key={i} className={`aspect-square rounded-lg flex items-center justify-center text-xs ${
-                    i % 7 === 0 ? 'bg-success/20 text-success' : 
-                    i % 5 === 0 ? 'bg-primary/20 text-primary' : 
-                    'bg-muted/20 text-muted-foreground'
-                  }`}>
-                    {i + 1}
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-success rounded-full"></div>
-                  <span className="text-muted-foreground">Training Day</span>
+              <div className="space-y-4">
+                <div className="p-4 bg-muted/20 rounded-lg text-center">
+                  <p className="text-4xl font-bold text-foreground">{stats.totalSessions}</p>
+                  <p className="text-sm text-muted-foreground">Total Sessions</p>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <div className="w-3 h-3 bg-primary rounded-full"></div>
-                  <span className="text-muted-foreground">Streak Bonus</span>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-3 bg-success/10 rounded-lg text-center">
+                    <p className="text-xl font-bold text-success">{stats.streakDays}</p>
+                    <p className="text-xs text-muted-foreground">Day Streak</p>
+                  </div>
+                  <div className="p-3 bg-primary/10 rounded-lg text-center">
+                    <p className="text-xl font-bold text-primary">{stats.totalTimeMins}m</p>
+                    <p className="text-xs text-muted-foreground">Total Time</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -251,68 +182,67 @@ const Dashboard = () => {
 
         <TabsContent value="insights" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* AI Insights */}
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
                 <Brain className="h-5 w-5 mr-2 text-primary" />
                 AI Insights
               </h3>
               <div className="space-y-4">
-                <div className="p-4 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg">
-                  <p className="text-sm font-medium text-foreground mb-2">💡 Personalized Recommendation</p>
-                  <p className="text-sm text-muted-foreground">
-                    Your attention skills have improved {statsData.improvement}% this week! Try the Reaction Speed game to build on this momentum.
-                  </p>
-                </div>
-                <div className="p-4 bg-gradient-to-r from-success/10 to-accent/10 rounded-lg">
-                  <p className="text-sm font-medium text-foreground mb-2">🎯 Today's Challenge</p>
-                  <p className="text-sm text-muted-foreground">
-                    Based on your recent performance, I've adjusted Word Memory to the perfect difficulty level for optimal learning.
-                  </p>
-                </div>
-                <div className="p-4 bg-gradient-to-r from-accent/10 to-primary/10 rounded-lg">
-                  <p className="text-sm font-medium text-foreground mb-2">📈 Progress Insight</p>
-                  <p className="text-sm text-muted-foreground">
-                    You're performing best during morning sessions. Consider scheduling your training between 9-11 AM for optimal results.
-                  </p>
-                </div>
+                {stats.totalSessions === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">Play some games to get personalized insights!</p>
+                ) : (
+                  <>
+                    <div className="p-4 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-lg">
+                      <p className="text-sm font-medium text-foreground mb-2">💡 Personalized Recommendation</p>
+                      <p className="text-sm text-muted-foreground">
+                        Your scores have changed {stats.improvement >= 0 ? `+${stats.improvement}%` : `${stats.improvement}%`} this week. 
+                        {stats.improvement > 0 ? ' Great progress — keep it up!' : ' Try playing more consistently for better results.'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-r from-success/10 to-accent/10 rounded-lg">
+                      <p className="text-sm font-medium text-foreground mb-2">🎯 Strongest Domain</p>
+                      <p className="text-sm text-muted-foreground">
+                        {(() => {
+                          const best = Object.entries(domainScores).sort(([,a], [,b]) => b - a)[0];
+                          return best ? `Your ${best[0]} skills are your strongest at ${best[1]}%.` : 'Play more games to discover your strengths.';
+                        })()}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-r from-accent/10 to-primary/10 rounded-lg">
+                      <p className="text-sm font-medium text-foreground mb-2">📈 Focus Area</p>
+                      <p className="text-sm text-muted-foreground">
+                        {(() => {
+                          const weakest = Object.entries(domainScores).filter(([,v]) => v > 0).sort(([,a], [,b]) => a - b)[0];
+                          return weakest ? `Consider practicing more ${weakest[0]} games to improve from ${weakest[1]}%.` : 'Play games across all domains for balanced training.';
+                        })()}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Recent Achievements */}
             <div className="glass-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-4 flex items-center">
                 <Trophy className="h-5 w-5 mr-2 text-accent" />
-                Recent Achievements
+                Session Summary
               </h3>
               <div className="space-y-3">
-                <div className="flex items-center space-x-3 p-3 bg-success/10 rounded-lg">
-                  <div className="p-2 bg-gradient-to-br from-success to-success/80 rounded-full">
-                    <Star className="h-4 w-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Optimal Challenge</p>
-                    <p className="text-xs text-muted-foreground">AI matched your skill perfectly</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3 p-3 bg-primary/10 rounded-lg">
-                  <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-full">
-                    <Flame className="h-4 w-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Week Warrior</p>
-                    <p className="text-xs text-muted-foreground">7-day training streak</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3 p-3 bg-accent/10 rounded-lg">
-                  <div className="p-2 bg-gradient-to-br from-accent to-accent/80 rounded-full">
-                    <Brain className="h-4 w-4 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Memory Master</p>
-                    <p className="text-xs text-muted-foreground">Perfect score in Memory Matching</p>
-                  </div>
-                </div>
+                {sessions.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No sessions yet. Start playing!</p>
+                ) : (
+                  sessions.slice(0, 5).map(s => (
+                    <div key={s.id} className="flex items-center space-x-3 p-3 bg-muted/10 rounded-lg">
+                      <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-full">
+                        <Star className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-foreground">{s.gameName}</p>
+                        <p className="text-xs text-muted-foreground">Score: {s.score}% · Level {s.level}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
