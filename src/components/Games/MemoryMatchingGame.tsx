@@ -298,79 +298,26 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     );
   }
 
-  if (gameComplete) {
+  if (gameComplete && gameConfig) {
     const isWin = matches === gameConfig.symbolCount;
-    const streak = analytics.getStreak();
-    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className={`p-4 bg-gradient-to-br rounded-full w-20 h-20 mx-auto flex items-center justify-center ${
-            isWin ? 'from-success to-success-light' : 'from-muted to-muted-dark'
-          }`}>
-            {isWin ? <Trophy className="h-10 w-10 text-white" /> : <Target className="h-10 w-10 text-white" />}
-          </div>
-          
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">
-              {isWin ? 'Level Complete!' : 'Try Again!'}
-            </h2>
-            <p className="text-muted-foreground mb-4">
-              Level {currentLevel} • {matches} matches • {moves} moves
-            </p>
-            
-            {streak > 0 && (
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <Star className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-medium">Streak: {streak}</span>
-              </div>
-            )}
-            
-            {/* AI Insights */}
-            <div className="bg-primary/10 rounded-lg p-3 mb-4">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">AI Adaptation</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                <div>Skill Level: {Math.round(banditStats.skillLevel * 100)}%</div>
-                <div>Exploration: {Math.round(banditStats.epsilon * 100)}%</div>
-                <div>Games Analyzed: {banditStats.totalPulls}</div>
-                <div>Playstyle: {context?.userType?.replace('_', ' ')}</div>
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span>Overall Progress</span>
-                <span>{currentLevel}/25</span>
-              </div>
-              <Progress value={(currentLevel / 25) * 100} className="h-2" />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            {currentLevel > 1 && (
-              <Button onClick={previousLevel} variant="outline" className="w-full">
-                ← Previous
-              </Button>
-            )}
-            {currentLevel < 25 && isWin && (
-              <Button onClick={nextLevel} className="w-full btn-primary">
-                Next Level →
-              </Button>
-            )}
-            <Button onClick={() => initializeGame()} variant="outline" className="w-full">
-              <RotateCcw className="h-4 w-4 mr-2" />
-              Retry
-            </Button>
-            <Button onClick={onExit} className="w-full btn-primary">
-              <Home className="h-4 w-4 mr-2" />
-              Exit
-            </Button>
-          </div>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={computeScore()}
+        succeeded={isWin}
+        prediction={prediction}
+        insight={insight || `Matches ${matches}/${gameConfig.symbolCount} • Moves ${moves} • Time left ${formatTime(timeLeft)}.`}
+        stats={[
+          { label: 'Matches', value: `${matches}/${gameConfig.symbolCount}`, tone: 'success' },
+          { label: 'Moves', value: moves, tone: 'accent' },
+          { label: 'Streak', value: analytics.getStreak(), tone: 'primary' },
+        ]}
+        canAdvance={isWin && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 
