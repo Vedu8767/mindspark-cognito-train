@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { wordMemoryBandit, type WordMemoryContext, type WordMemoryAction } from '@/lib/bandit/wordMemoryBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
 
 interface WordMemoryGameProps {
   onComplete: (score: number) => void;
@@ -17,6 +18,7 @@ const WORD_LISTS = {
 };
 
 const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
+  const { level: savedLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('word-memory');
   const [gamePhase, setGamePhase] = useState<'instructions' | 'study' | 'recall' | 'results' | 'complete'>('instructions');
   const [wordsToStudy, setWordsToStudy] = useState<string[]>([]);
   const [userInput, setUserInput] = useState('');
@@ -27,12 +29,20 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
   const [incorrectWords, setIncorrectWords] = useState<string[]>([]);
   const [levelsCompleted, setLevelsCompleted] = useState(0);
   const [levelStartTime, setLevelStartTime] = useState(0);
-  
+
   // Bandit-related state
   const [currentAction, setCurrentAction] = useState<WordMemoryAction | null>(null);
   const [banditStats, setBanditStats] = useState(wordMemoryBandit.getStats());
   const [nextLevelPrediction, setNextLevelPrediction] = useState<'easier' | 'same' | 'harder'>('same');
   const [performanceInsight, setPerformanceInsight] = useState('');
+
+  // Restore the persisted bandit level on mount.
+  useEffect(() => {
+    if (progressLoaded) {
+      wordMemoryBandit.setLevel(savedLevel);
+      setBanditStats(wordMemoryBandit.getStats());
+    }
+  }, [progressLoaded, savedLevel]);
 
   const getContext = (): WordMemoryContext => {
     const now = new Date();
@@ -172,6 +182,7 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
   };
 
   const nextLevel = () => {
+    saveLevel(wordMemoryBandit.getStats().currentLevel, { incrementSessions: true });
     setLevelsCompleted(prev => prev + 1);
     if (levelsCompleted >= 4) {
       completeGame();

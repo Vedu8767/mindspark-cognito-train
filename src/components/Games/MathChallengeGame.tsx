@@ -145,12 +145,17 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
   }, [generateProblem]);
 
   const handleAnswer = (selectedAnswer: number) => {
+    // Guards: ignore presses when level/game is finishing or while a transition is queued.
+    if (levelComplete || gameComplete || isProcessingRef.current) return;
+    if (!problems[currentProblem]) return;
+    isProcessingRef.current = true;
+
     const timeSpent = Date.now() - problemStartTime;
     setTotalProblemsTime(prev => prev + timeSpent);
-    
+
     const problem = problems[currentProblem];
     const isCorrect = selectedAnswer === problem.answer;
-    
+
     const updatedProblem = {
       ...problem,
       userAnswer: selectedAnswer,
@@ -186,6 +191,7 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
         setCurrentProblem(prev => prev + 1);
         setProblemStartTime(Date.now());
       }
+      isProcessingRef.current = false;
     }, 500);
   };
 
@@ -225,6 +231,8 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
   };
 
   const nextLevel = () => {
+    // Persist the new bandit level to DB so the user resumes here next session.
+    saveLevel(mathChallengeBandit.getStats().currentLevel, { incrementSessions: true });
     setLevelsCompleted(prev => prev + 1);
     if (levelsCompleted >= 4) {
       endGame();
