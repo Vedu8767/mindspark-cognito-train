@@ -225,8 +225,7 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
 
   const endGame = () => {
     setGameComplete(true);
-    const finalScore = Math.min(100, Math.floor((score / 500) * 100));
-    setTimeout(() => onComplete(finalScore), 1000);
+    // User chooses what to do next from the gameComplete screen.
   };
 
   const startGame = () => {

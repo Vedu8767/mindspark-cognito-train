@@ -232,18 +232,10 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     // Determine next level using bandit
     const optimalLevel = reactionBandit.getOptimalLevel(context);
     
-    if (currentLevel < 25) {
-      setTimeout(() => {
-        setCurrentLevel(optimalLevel);
-        setGameState('waiting');
-      }, 3000);
-    } else {
-      setTimeout(() => {
-        setGameState('complete');
-        const finalScore = Math.min(100, Math.floor((score / (25 * 100)) * 100));
-        onComplete(finalScore);
-      }, 3000);
-    }
+    // Show level-complete screen so the user explicitly chooses Next / Replay / Exit.
+    setTimeout(() => {
+      setGameState('complete');
+    }, 800);
   };
 
   const startGame = () => {

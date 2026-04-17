@@ -191,17 +191,13 @@ const TowerOfHanoiGame = ({ onComplete, onExit }: TowerOfHanoiGameProps) => {
   };
 
   const advanceToNextLevel = () => {
-    const context = getContext();
-    const optimalLevel = towerOfHanoiBandit.getOptimalLevel(context);
-    
-    if (optimalLevel >= 25 || currentLevel >= 25) {
+    // Always advance by exactly +1 (user choice). No silent jumps.
+    if (currentLevel >= 25) {
       setGameComplete(true);
-      const finalScore = Math.min(100, Math.floor((score / 1000) * 100));
-      onComplete(finalScore);
-    } else {
-      setCurrentLevel(optimalLevel);
-      setLevelComplete(false);
+      return;
     }
+    setCurrentLevel(currentLevel + 1);
+    setLevelComplete(false);
   };
 
   const startGame = () => {

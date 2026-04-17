@@ -182,8 +182,7 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
 
   const completeGame = () => {
     setGamePhase('complete');
-    const finalScore = Math.min(100, Math.floor((score / 300) * 100));
-    setTimeout(() => onComplete(finalScore), 1000);
+    // User chooses Play Again or Back to Games on the complete screen.
   };
 
   const restartGame = () => {
