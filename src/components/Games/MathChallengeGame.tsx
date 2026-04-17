@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Calculator, Timer, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { mathChallengeBandit, type MathContext, type MathAction } from '@/lib/bandit/mathChallengeBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
 
 interface MathChallengeGameProps {
   onComplete: (score: number) => void;
@@ -19,6 +20,7 @@ interface Problem {
 }
 
 const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
+  const { level: savedLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('math-challenge');
   const [problems, setProblems] = useState<Problem[]>([]);
   const [currentProblem, setCurrentProblem] = useState(0);
   const [score, setScore] = useState(0);
@@ -32,12 +34,21 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
   const [problemStartTime, setProblemStartTime] = useState(0);
   const [levelsCompleted, setLevelsCompleted] = useState(0);
   const [totalProblemsTime, setTotalProblemsTime] = useState(0);
+  const isProcessingRef = useRef(false);
   
   // Bandit-related state
   const [currentAction, setCurrentAction] = useState<MathAction | null>(null);
   const [banditStats, setBanditStats] = useState(mathChallengeBandit.getStats());
   const [nextLevelPrediction, setNextLevelPrediction] = useState<'easier' | 'same' | 'harder'>('same');
   const [performanceInsight, setPerformanceInsight] = useState('');
+
+  // Restore the persisted bandit level on mount once we know the user's saved level.
+  useEffect(() => {
+    if (progressLoaded) {
+      mathChallengeBandit.setLevel(savedLevel);
+      setBanditStats(mathChallengeBandit.getStats());
+    }
+  }, [progressLoaded, savedLevel]);
 
   const getContext = (): MathContext => {
     const now = new Date();
