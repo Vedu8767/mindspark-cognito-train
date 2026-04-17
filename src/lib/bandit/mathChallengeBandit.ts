@@ -183,6 +183,11 @@ export class MathChallengeBandit {
     return Math.sqrt(2 * Math.log(this.totalPulls + 1) / arm.pulls) * 0.2;
   }
 
+  /** Externally set the current level (e.g. when restoring from DB). */
+  setLevel(level: number): void {
+    this.currentLevel = Math.max(1, Math.min(25, level));
+  }
+
   getOptimalLevel(context: MathContext): number {
     const recentGames = this.recentPerformance.slice(-5);
     
