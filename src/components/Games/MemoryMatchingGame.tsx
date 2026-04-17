@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { RotateCcw, Home, Trophy, Star, Target, Clock, Brain, Sparkles, TrendingUp } from 'lucide-react';
+import { Home, Target, Clock, Brain, Sparkles, Trophy, Star, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { memoryGameBandit, GameAction, UserContext } from '@/lib/bandit';
 import { useGameAnalytics } from '@/hooks/useGameAnalytics';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface Card {
   id: number;
@@ -19,6 +21,7 @@ interface MemoryMatchingGameProps {
 }
 
 const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => {
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('memory-matching');
   const [cards, setCards] = useState<Card[]>([]);
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
   const [matches, setMatches] = useState(0);
@@ -26,23 +29,22 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
   const [timeLeft, setTimeLeft] = useState(120);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameComplete, setGameComplete] = useState(false);
-  const [currentLevel, setCurrentLevel] = useState(() => {
-    const saved = localStorage.getItem('memoryGameLevel');
-    return saved ? parseInt(saved) : 1;
-  });
   const [gameConfig, setGameConfig] = useState<GameAction | null>(null);
   const [context, setContext] = useState<UserContext | null>(null);
   const [showPreview, setShowPreview] = useState(false);
-  const [levelProgress, setLevelProgress] = useState(0);
   const [adaptiveTimeBonus, setAdaptiveTimeBonus] = useState(0);
-  
+  const [lastReward, setLastReward] = useState<number | null>(null);
+  const [prediction, setPrediction] = useState<DifficultyPrediction>('same');
+  const [insight, setInsight] = useState<string>('');
+
   const analytics = useGameAnalytics();
 
   const allSymbols = ['🧠', '🎯', '⚡', '🌟', '🎪', '🎨', '🎭', '🔮', '🔥', '💎', '🚀', '🎵', '🌈', '⭐', '🎲', '🦋'];
 
   useEffect(() => {
-    initializeLevel();
-  }, [currentLevel]);
+    if (progressLoaded) initializeLevel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLevel, progressLoaded]);
 
   const initializeLevel = () => {
     // Get context for current level with full user analytics
