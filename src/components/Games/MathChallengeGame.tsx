@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Calculator, Timer, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { mathChallengeBandit, type MathContext, type MathAction } from '@/lib/bandit/mathChallengeBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
 
 interface MathChallengeGameProps {
   onComplete: (score: number) => void;
@@ -19,6 +20,7 @@ interface Problem {
 }
 
 const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
+  const { level: savedLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('math-challenge');
   const [problems, setProblems] = useState<Problem[]>([]);
   const [currentProblem, setCurrentProblem] = useState(0);
   const [score, setScore] = useState(0);
@@ -32,12 +34,21 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
   const [problemStartTime, setProblemStartTime] = useState(0);
   const [levelsCompleted, setLevelsCompleted] = useState(0);
   const [totalProblemsTime, setTotalProblemsTime] = useState(0);
+  const isProcessingRef = useRef(false);
   
   // Bandit-related state
   const [currentAction, setCurrentAction] = useState<MathAction | null>(null);
   const [banditStats, setBanditStats] = useState(mathChallengeBandit.getStats());
   const [nextLevelPrediction, setNextLevelPrediction] = useState<'easier' | 'same' | 'harder'>('same');
   const [performanceInsight, setPerformanceInsight] = useState('');
+
+  // Restore the persisted bandit level on mount once we know the user's saved level.
+  useEffect(() => {
+    if (progressLoaded) {
+      mathChallengeBandit.setLevel(savedLevel);
+      setBanditStats(mathChallengeBandit.getStats());
+    }
+  }, [progressLoaded, savedLevel]);
 
   const getContext = (): MathContext => {
     const now = new Date();
@@ -134,12 +145,17 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
   }, [generateProblem]);
 
   const handleAnswer = (selectedAnswer: number) => {
+    // Guards: ignore presses when level/game is finishing or while a transition is queued.
+    if (levelComplete || gameComplete || isProcessingRef.current) return;
+    if (!problems[currentProblem]) return;
+    isProcessingRef.current = true;
+
     const timeSpent = Date.now() - problemStartTime;
     setTotalProblemsTime(prev => prev + timeSpent);
-    
+
     const problem = problems[currentProblem];
     const isCorrect = selectedAnswer === problem.answer;
-    
+
     const updatedProblem = {
       ...problem,
       userAnswer: selectedAnswer,
@@ -175,6 +191,7 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
         setCurrentProblem(prev => prev + 1);
         setProblemStartTime(Date.now());
       }
+      isProcessingRef.current = false;
     }, 500);
   };
 
@@ -214,6 +231,8 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
   };
 
   const nextLevel = () => {
+    // Persist the new bandit level to DB so the user resumes here next session.
+    saveLevel(mathChallengeBandit.getStats().currentLevel, { incrementSessions: true });
     setLevelsCompleted(prev => prev + 1);
     if (levelsCompleted >= 4) {
       endGame();
@@ -225,8 +244,7 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
 
   const endGame = () => {
     setGameComplete(true);
-    const finalScore = Math.min(100, Math.floor((score / 500) * 100));
-    setTimeout(() => onComplete(finalScore), 1000);
+    // User chooses what to do next from the gameComplete screen.
   };
 
   const startGame = () => {

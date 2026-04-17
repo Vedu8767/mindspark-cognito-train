@@ -256,8 +256,7 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
 
   const endGame = () => {
     setGameComplete(true);
-    const finalScore = Math.min(100, Math.floor((score / 800) * 100));
-    setTimeout(() => onComplete(finalScore), 1000);
+    // Score is shown on the gameComplete screen; user chooses Play Again or Back to Games.
   };
 
   const startGame = () => {

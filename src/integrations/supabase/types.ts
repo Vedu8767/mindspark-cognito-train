@@ -119,6 +119,42 @@ export type Database = {
         }
         Relationships: []
       }
+      game_progress: {
+        Row: {
+          created_at: string
+          current_level: number
+          game_id: string
+          highest_level: number
+          id: string
+          last_played_at: string
+          total_sessions: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_level?: number
+          game_id: string
+          highest_level?: number
+          id?: string
+          last_played_at?: string
+          total_sessions?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_level?: number
+          game_id?: string
+          highest_level?: number
+          id?: string
+          last_played_at?: string
+          total_sessions?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       game_sessions: {
         Row: {
           accuracy: number | null
