@@ -87,11 +87,20 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     }
   }, [timeLeft, gameStarted, gameComplete]);
 
+  // Only auto-end on full match if the game has actually started, and never below 2 symbols
+  // (guards against an empty/initial-state effect firing immediately).
   useEffect(() => {
-    if (gameConfig && matches === gameConfig.symbolCount && !gameComplete) {
+    if (
+      gameStarted &&
+      gameConfig &&
+      gameConfig.symbolCount >= 2 &&
+      matches === gameConfig.symbolCount &&
+      !gameComplete
+    ) {
       endGame();
     }
-  }, [matches, gameComplete, gameConfig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matches, gameComplete, gameConfig, gameStarted]);
 
   // Adaptive timer: add bonus time for correct matches if enabled
   useEffect(() => {
@@ -185,46 +194,45 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
 
   const endGame = () => {
     setGameComplete(true);
-    
-    // Check if level was completed successfully
+
     const levelCompleted = matches === gameConfig?.symbolCount;
-    
-    // End analytics session
     const session = analytics.endSession(levelCompleted, timeLeft);
-    
+
     if (session && context && gameConfig) {
-      // Update bandit with performance data
       const { performance, reward } = analytics.updateBandit(context, gameConfig, session);
-      
+      setLastReward(reward);
+
+      // Performance-driven prediction (no random defaults).
+      const updatedContext: UserContext = {
+        ...context,
+        recentAccuracy: performance.accuracy,
+      };
+      const optimal = memoryGameBandit.getOptimalLevel(updatedContext);
+      const next: DifficultyPrediction =
+        optimal > currentLevel ? 'harder' : optimal < currentLevel ? 'easier' : 'same';
+      setPrediction(next);
+
+      const acc = Math.round(performance.accuracy * 100);
+      const eff = Math.round(performance.timeEfficiency * 100);
+      setInsight(
+        `Accuracy ${acc}% • Time efficiency ${eff}% • Reward ${reward.toFixed(0)}. ` +
+          (next === 'harder'
+            ? 'Strong run — the AI will push you a notch.'
+            : next === 'easier'
+            ? 'Tough round — the AI will ease the next one.'
+            : 'Solid round — the AI will keep difficulty steady.')
+      );
+
       console.log('[Game] Performance:', {
         completed: performance.completed,
         accuracy: performance.accuracy.toFixed(2),
-        reward: reward.toFixed(1)
+        reward: reward.toFixed(1),
+        nextPrediction: next,
       });
-      
-      // Progress to next level if completed
-      if (levelCompleted && currentLevel < 25) {
-        const newLevel = currentLevel + 1;
-        setCurrentLevel(newLevel);
-        localStorage.setItem('memoryGameLevel', newLevel.toString());
-        setLevelProgress(Math.min(100, (newLevel / 25) * 100));
-      }
-    } else if (levelCompleted && currentLevel < 25) {
-      // Fallback progression
-      const newLevel = currentLevel + 1;
-      setCurrentLevel(newLevel);
-      localStorage.setItem('memoryGameLevel', newLevel.toString());
-      setLevelProgress(Math.min(100, (newLevel / 25) * 100));
     }
 
-    // Calculate score
-    const timeBonus = Math.max(0, timeLeft * 2);
-    const moveEfficiency = Math.max(0, 100 - moves * 3);
-    const matchBonus = matches * 10;
-    const levelBonus = currentLevel * 5;
-    const score = Math.min(100, timeBonus + moveEfficiency + matchBonus + levelBonus);
-    
-    setTimeout(() => onComplete(score), 1000);
+    // NOTE: We no longer auto-advance the level or auto-call onComplete.
+    // The user explicitly chooses Next / Replay / Save & Exit on the LevelCompleteScreen.
   };
 
   const formatTime = (seconds: number) => {
@@ -233,22 +241,31 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const nextLevel = () => {
-    if (currentLevel < 25) {
-      const newLevel = currentLevel + 1;
-      setCurrentLevel(newLevel);
-      localStorage.setItem('memoryGameLevel', newLevel.toString());
-      setGameComplete(false);
-    }
+  const computeScore = () => {
+    const timeBonus = Math.max(0, timeLeft * 2);
+    const moveEfficiency = Math.max(0, 100 - moves * 3);
+    const matchBonus = matches * 10;
+    const levelBonus = currentLevel * 5;
+    return Math.min(100, timeBonus + moveEfficiency + matchBonus + levelBonus);
   };
 
-  const previousLevel = () => {
-    if (currentLevel > 1) {
-      const newLevel = currentLevel - 1;
-      setCurrentLevel(newLevel);
-      localStorage.setItem('memoryGameLevel', newLevel.toString());
-      setGameComplete(false);
-    }
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setGameComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setGameComplete(false);
+    initializeGame();
+  };
+
+  const handleSaveAndExit = async () => {
+    const succeeded = matches === gameConfig?.symbolCount;
+    const levelToSave = succeeded && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(computeScore());
   };
 
   const getDifficultyColor = () => {
