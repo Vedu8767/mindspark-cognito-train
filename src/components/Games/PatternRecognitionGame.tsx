@@ -293,8 +293,7 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
 
   const endGame = () => {
     setGameComplete(true);
-    const finalScore = score;
-    setTimeout(() => onComplete(finalScore), 1000);
+    // User chooses what to do next from the gameComplete screen.
   };
 
   const startGame = () => {
