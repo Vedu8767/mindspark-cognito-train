@@ -341,59 +341,23 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
 
   if (levelComplete && currentAction) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Eye className="h-10 w-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            
-            <div className="bg-muted/50 p-4 rounded-lg mb-4">
-              <p className="text-sm text-muted-foreground">{insight}</p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-success/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Correct</p>
-                <p className="text-xl font-bold text-success">{correct}/{currentAction.trials}</p>
-              </div>
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="text-xl font-bold text-primary">{score}</p>
-              </div>
-            </div>
-            
-            <div className="mt-4 p-3 rounded-lg border border-border">
-              <p className="text-sm text-muted-foreground mb-2">Next Level Prediction</p>
-              <div className="flex items-center justify-center gap-2">
-                {nextDifficulty === 'harder' && (
-                  <>
-                    <TrendingUp className="h-5 w-5 text-success" />
-                    <span className="text-success font-medium">Moving Up!</span>
-                  </>
-                )}
-                {nextDifficulty === 'easier' && (
-                  <>
-                    <TrendingDown className="h-5 w-5 text-warning" />
-                    <span className="text-warning font-medium">Adjusting Down</span>
-                  </>
-                )}
-                {nextDifficulty === 'same' && (
-                  <>
-                    <Minus className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-muted-foreground font-medium">Same Level</span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <Button onClick={proceedToNextLevel} className="w-full btn-primary">
-            Continue
-          </Button>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextDifficulty as DifficultyPrediction}
+        insight={insight}
+        stats={[
+          { label: 'Correct', value: `${correct}/${currentAction.trials}`, tone: 'success' },
+          { label: 'Score', value: score, tone: 'primary' },
+          { label: 'Time Left', value: `${timeLeft}s`, tone: 'accent' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 

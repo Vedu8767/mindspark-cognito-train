@@ -415,50 +415,23 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
 
   if (levelComplete) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Navigation className="h-10 w-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            <p className="text-muted-foreground mb-2">{performanceInsight}</p>
-            
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <span className="text-sm text-muted-foreground">Next level will be:</span>
-              {nextDifficulty === 'harder' && (
-                <span className="flex items-center text-destructive font-semibold">
-                  <TrendingUp className="h-4 w-4 mr-1" /> Harder
-                </span>
-              )}
-              {nextDifficulty === 'easier' && (
-                <span className="flex items-center text-success font-semibold">
-                  <TrendingDown className="h-4 w-4 mr-1" /> Easier
-                </span>
-              )}
-              {nextDifficulty === 'same' && (
-                <span className="flex items-center text-primary font-semibold">
-                  <Minus className="h-4 w-4 mr-1" /> Similar
-                </span>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="bg-success/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Correct</p>
-                <p className="text-xl font-bold text-success">{correct}/{currentAction?.trialCount || 8}</p>
-              </div>
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="text-xl font-bold text-primary">{score}</p>
-              </div>
-            </div>
-          </div>
-          <Button onClick={proceedToNextLevel} className="btn-primary w-full">
-            Continue to Level {spatialBandit.getOptimalLevel(buildContext())}
-          </Button>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextDifficulty as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: `${correct}/${currentAction?.trialCount ?? 8}`, tone: 'success' },
+          { label: 'Moves', value: totalMoves, tone: 'accent' },
+          { label: 'Score', value: score, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 
