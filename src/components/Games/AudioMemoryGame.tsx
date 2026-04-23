@@ -7,6 +7,8 @@ import {
   AudioContext as AudioBanditContext, 
   AudioAction 
 } from '@/lib/bandit/audioMemoryBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface AudioMemoryGameProps {
   onComplete: (score: number) => void;
@@ -25,7 +27,7 @@ const TONES = [
 ];
 
 const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('audio-memory');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [sequence, setSequence] = useState<number[]>([]);
   const [userSequence, setUserSequence] = useState<number[]>([]);
@@ -240,14 +242,23 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
     setPerformanceInsight(insight);
   };
 
-  const advanceToNextLevel = () => {
-    // Always advance by exactly +1 (user choice). No silent jumps.
-    if (currentLevel >= 25) {
-      setGameComplete(true);
-      return;
-    }
-    setCurrentLevel(currentLevel + 1);
+  const succeededLevel = !!currentConfig && correct / Math.max(1, currentConfig.trialCount) >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
     setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const startGame = () => {
@@ -255,8 +266,8 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
     setStartTime(Date.now());
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);
@@ -309,43 +320,23 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
 
   if (levelComplete && currentConfig) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6">
-          <div className="flex items-center justify-center gap-2">
-            <Trophy className="h-12 w-12 text-success" />
-            <Badge variant="outline" className="bg-primary/10">
-              <Brain className="h-3 w-3 mr-1" />
-              AI Adaptive
-            </Badge>
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level Complete!</h2>
-            <p className="text-muted-foreground mb-4">Score: {score}</p>
-            <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-              <div className="flex items-center justify-center gap-2">
-                {getDifficultyIcon()}
-                <span className="text-sm">
-                  Next level will be <span className="font-semibold">{nextDifficultyPrediction}</span>
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground italic">{performanceInsight}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-muted/30 p-3 rounded-lg">
-              <p className="text-muted-foreground">Accuracy</p>
-              <p className="font-bold">{correct}/{currentConfig.trialCount} ({Math.round((correct / currentConfig.trialCount) * 100)}%)</p>
-            </div>
-            <div className="bg-muted/30 p-3 rounded-lg">
-              <p className="text-muted-foreground">Sequence Length</p>
-              <p className="font-bold">{currentConfig.sequenceLength} tones</p>
-            </div>
-          </div>
-          <Button onClick={advanceToNextLevel} className="w-full btn-primary">
-            Continue to Level {audioMemoryBandit.getOptimalLevel(getContext())}
-          </Button>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextDifficultyPrediction as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: `${correct}/${currentConfig.trialCount}`, tone: 'success' },
+          { label: 'Sequence', value: currentConfig.sequenceLength, tone: 'accent' },
+          { label: 'Score', value: score, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 

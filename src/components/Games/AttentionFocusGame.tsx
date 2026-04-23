@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Target, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { attentionBandit, AttentionContext, AttentionAction } from '@/lib/bandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 type TargetColor = 'blue' | 'green' | 'purple' | 'orange' | 'red' | 'yellow' | 'pink';
 
@@ -36,7 +38,7 @@ interface AttentionFocusGameProps {
 }
 
 const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('attention-focus');
   const [targets, setTargets] = useState<GameTarget[]>([]);
   const [score, setScore] = useState(0);
   const [hits, setHits] = useState(0);
@@ -131,8 +133,9 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
   }, [buildContext]);
 
   useEffect(() => {
-    initializeLevel();
-  }, [currentLevel]);
+    if (progressLoaded) initializeLevel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLevel, progressLoaded]);
 
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
@@ -250,14 +253,6 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
     setNextLevelPrediction(prediction);
     setPerformanceInsight(insight);
     setBanditStats(attentionBandit.getStats());
-    
-    setTimeout(() => {
-      if (currentLevel < 25) {
-        setCurrentLevel(optimalLevel);
-      } else {
-        endGame();
-      }
-    }, 2500);
   };
 
   const endGame = () => {
@@ -271,12 +266,32 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
     generateTarget();
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     sessionStartRef.current = Date.now();
     initializeLevel();
+  };
+
+  const succeededLevel = !!gameConfig && hits >= Math.floor(gameConfig.targetCount * 0.7);
+  const finalScore = score;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(finalScore);
   };
 
   if (gameComplete) {
@@ -315,63 +330,24 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
   }
 
   if (levelComplete) {
-    const getDifficultyColor = () => {
-      if (nextLevelPrediction === 'harder') return 'text-orange-500';
-      if (nextLevelPrediction === 'easier') return 'text-green-500';
-      return 'text-blue-500';
-    };
-    
-    const getDifficultyIcon = () => {
-      if (nextLevelPrediction === 'harder') return '🔥';
-      if (nextLevelPrediction === 'easier') return '💪';
-      return '➡️';
-    };
-    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Target className="h-10 w-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            
-            {/* Performance Insight */}
-            <div className="bg-primary/10 p-3 rounded-lg mb-4">
-              <p className="text-sm font-medium text-foreground">{performanceInsight}</p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-success/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Hits</p>
-                <p className="text-xl font-bold text-success">{hits}</p>
-              </div>
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="text-xl font-bold text-primary">{score}</p>
-              </div>
-            </div>
-            
-            {/* Next Level Prediction */}
-            <div className="mt-4 p-3 bg-muted/30 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Next Level Prediction</p>
-              <p className={`text-lg font-bold ${getDifficultyColor()}`}>
-                {getDifficultyIcon()} {nextLevelPrediction === 'harder' ? 'Challenge Incoming!' : nextLevelPrediction === 'easier' ? 'Easier Level' : 'Balanced Difficulty'}
-              </p>
-            </div>
-            
-            <div className="mt-3 flex items-center justify-center gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <Brain className="h-3 w-3" />
-                <span>Skill: {(banditStats.skillLevel * 100).toFixed(0)}%</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span>Explore: {(banditStats.epsilon * 100).toFixed(0)}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextLevelPrediction as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Hits', value: `${hits}/${gameConfig?.targetCount ?? 0}`, tone: 'success' },
+          { label: 'Misses', value: misses, tone: 'accent' },
+          { label: 'Combo', value: maxCombo, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 

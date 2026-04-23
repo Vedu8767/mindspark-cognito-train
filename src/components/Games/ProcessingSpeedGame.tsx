@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Zap, Clock, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { processingSpeedBandit, type ProcessingContext, type ProcessingAction } from '@/lib/bandit/processingSpeedBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface ProcessingSpeedGameProps {
   onComplete: (score: number) => void;
@@ -29,7 +31,7 @@ const SYMBOLS = ['★', '●', '■', '▲', '♦', '♠', '♥', '♣', '◆', 
 const CODES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C'];
 
 const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('processing-speed');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
   const [score, setScore] = useState(0);
@@ -242,16 +244,24 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
     processingSpeedBandit.updateModel(context, currentAction, reward, metrics);
   };
 
-  const proceedToNextLevel = () => {
-    const context = buildContext();
-    const nextLevel = processingSpeedBandit.getOptimalLevel(context);
-    
-    if (nextLevel > 25 || (currentLevel >= 25 && totalCorrect > (currentAction?.trialCount || 8) * (currentAction?.gridSize || 12) * 0.7)) {
-      endGame();
-    } else {
-      setCurrentLevel(nextLevel);
-      setLevelComplete(false);
-    }
+  const succeededLevel = !!currentAction &&
+    totalCorrect / Math.max(1, currentAction.trialCount * currentAction.gridSize) >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -264,8 +274,8 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
     setTrialStartTime(Date.now());
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);
@@ -311,50 +321,23 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
 
   if (levelComplete && currentAction) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Zap className="h-10 w-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            <p className="text-muted-foreground mb-2">{performanceInsight}</p>
-            
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <span className="text-sm text-muted-foreground">Next level will be:</span>
-              {nextDifficulty === 'harder' && (
-                <span className="flex items-center text-destructive font-semibold">
-                  <TrendingUp className="h-4 w-4 mr-1" /> Harder
-                </span>
-              )}
-              {nextDifficulty === 'easier' && (
-                <span className="flex items-center text-success font-semibold">
-                  <TrendingDown className="h-4 w-4 mr-1" /> Easier
-                </span>
-              )}
-              {nextDifficulty === 'same' && (
-                <span className="flex items-center text-primary font-semibold">
-                  <Minus className="h-4 w-4 mr-1" /> Similar
-                </span>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="bg-success/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Correct</p>
-                <p className="text-xl font-bold text-success">{totalCorrect}</p>
-              </div>
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="text-xl font-bold text-primary">{score}</p>
-              </div>
-            </div>
-          </div>
-          <Button onClick={proceedToNextLevel} className="btn-primary w-full">
-            Continue to Level {processingSpeedBandit.getOptimalLevel(buildContext())}
-          </Button>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextDifficulty as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: totalCorrect, tone: 'success' },
+          { label: 'Score', value: score, tone: 'primary' },
+          { label: 'Time Left', value: `${timeLeft}s`, tone: 'accent' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 

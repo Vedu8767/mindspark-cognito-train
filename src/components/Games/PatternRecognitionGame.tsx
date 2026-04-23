@@ -3,6 +3,8 @@ import { RotateCcw, Home, Trophy, Puzzle, Brain, TrendingUp, TrendingDown, Minus
 import { Button } from '@/components/ui/button';
 import { patternRecognitionBandit, PatternContext, PatternAction } from '@/lib/bandit/patternBandit';
 import { PerformanceMetrics } from '@/lib/bandit/types';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface Pattern {
   sequence: string[];
@@ -21,7 +23,7 @@ const NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 
 const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(patternRecognitionBandit.getLevel());
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('pattern-recognition');
   const [currentPattern, setCurrentPattern] = useState(0);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string>('');
@@ -185,6 +187,13 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     }
   }, [currentAction, generatePatterns]);
 
+  // Sync bandit internal level with persisted DB level once loaded.
+  useEffect(() => {
+    if (progressLoaded) {
+      patternRecognitionBandit.setLevel(currentLevel);
+    }
+  }, [progressLoaded, currentLevel]);
+
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
@@ -278,17 +287,36 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     patternRecognitionBandit.setLevel(nextLevel);
   };
 
-  const proceedToNextLevel = () => {
-    const nextLevel = patternRecognitionBandit.getLevel();
-    setCurrentLevel(nextLevel);
-    setLevelComplete(false);
-    
-    // Get new action from bandit
+  const succeededLevel = patterns.length > 0 && correctAnswers / patterns.length >= 0.5;
+
+  const refreshLevelAction = () => {
     const context = getContext();
     const action = patternRecognitionBandit.selectAction(context);
     setCurrentAction(action);
     setLevelStartTime(Date.now());
     setPatternStartTime(Date.now());
+  };
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    patternRecognitionBandit.setLevel(currentLevel + 1);
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+    refreshLevelAction();
+  };
+
+  const handleReplay = async () => {
+    patternRecognitionBandit.setLevel(currentLevel);
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+    refreshLevelAction();
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    patternRecognitionBandit.setLevel(levelToSave);
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -305,9 +333,9 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setGameStarted(true);
   };
 
-  const restartGame = () => {
+  const restartGame = async () => {
     patternRecognitionBandit.reset();
-    setCurrentLevel(1);
+    await saveLevel(1);
     setScore(0);
     setGameStarted(false);
     setGameComplete(false);
@@ -318,71 +346,24 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
 
   // Level Complete Screen
   if (levelComplete && !gameComplete) {
-    const accuracy = patterns.length > 0 ? (correctAnswers / patterns.length * 100).toFixed(0) : '0';
-    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Trophy className="h-10 w-10 text-white" />
-          </div>
-          
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            <p className="text-muted-foreground">
-              {correctAnswers} of {patterns.length} patterns correct ({accuracy}%)
-            </p>
-          </div>
-          
-          {/* Performance Insight */}
-          <div className="bg-primary/10 p-4 rounded-lg">
-            <p className="text-sm text-foreground">{performanceInsight}</p>
-          </div>
-          
-          {/* Next Level Prediction */}
-          <div className="flex items-center justify-center gap-2 p-3 rounded-lg bg-muted/50">
-            {nextLevelPrediction === 'harder' && (
-              <>
-                <TrendingUp className="h-5 w-5 text-success" />
-                <span className="text-success font-medium">Next level will be harder</span>
-              </>
-            )}
-            {nextLevelPrediction === 'easier' && (
-              <>
-                <TrendingDown className="h-5 w-5 text-warning" />
-                <span className="text-warning font-medium">Next level will be easier</span>
-              </>
-            )}
-            {nextLevelPrediction === 'same' && (
-              <>
-                <Minus className="h-5 w-5 text-muted-foreground" />
-                <span className="text-muted-foreground font-medium">Same difficulty level</span>
-              </>
-            )}
-          </div>
-          
-          {/* AI Stats */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="bg-muted/30 p-2 rounded">
-              <p className="text-muted-foreground">AI Exploration</p>
-              <p className="font-semibold text-foreground">{(banditStats.epsilon * 100).toFixed(0)}%</p>
-            </div>
-            <div className="bg-muted/30 p-2 rounded">
-              <p className="text-muted-foreground">Skill Level</p>
-              <p className="font-semibold text-foreground">{banditStats.skillLevel.toFixed(1)}</p>
-            </div>
-          </div>
-          
-          <div className="space-y-3">
-            <Button onClick={proceedToNextLevel} className="w-full btn-primary">
-              Continue to Level {patternRecognitionBandit.getLevel()}
-            </Button>
-            <Button onClick={endGame} variant="outline" className="w-full">
-              End Game
-            </Button>
-          </div>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextLevelPrediction as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: `${correctAnswers}/${patterns.length}`, tone: 'success' },
+          { label: 'Score', value: score, tone: 'primary' },
+          { label: 'Skill', value: banditStats.skillLevel.toFixed(1), tone: 'accent' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 

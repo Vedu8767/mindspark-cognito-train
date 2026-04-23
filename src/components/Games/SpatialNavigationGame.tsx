@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { RotateCcw, Home, Trophy, Navigation, MapPin, Target, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { spatialBandit, type SpatialContext, type SpatialAction } from '@/lib/bandit/spatialBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface SpatialNavigationGameProps {
   onComplete: (score: number) => void;
@@ -25,7 +27,7 @@ interface Trial {
 }
 
 const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('spatial-navigation');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
   const [score, setScore] = useState(0);
@@ -283,16 +285,23 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
     }
   };
 
-  const proceedToNextLevel = () => {
-    const context = buildContext();
-    const nextLevel = spatialBandit.getOptimalLevel(context);
-    
-    if (nextLevel > 25 || (currentLevel >= 25 && correct > (currentAction?.trialCount || 8) * 0.7)) {
-      endGame();
-    } else {
-      setCurrentLevel(nextLevel);
-      setLevelComplete(false);
-    }
+  const succeededLevel = !!currentAction && correct / Math.max(1, currentAction.trialCount) >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -304,8 +313,8 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
     setGameStarted(true);
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);
@@ -406,50 +415,23 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
 
   if (levelComplete) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Navigation className="h-10 w-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            <p className="text-muted-foreground mb-2">{performanceInsight}</p>
-            
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <span className="text-sm text-muted-foreground">Next level will be:</span>
-              {nextDifficulty === 'harder' && (
-                <span className="flex items-center text-destructive font-semibold">
-                  <TrendingUp className="h-4 w-4 mr-1" /> Harder
-                </span>
-              )}
-              {nextDifficulty === 'easier' && (
-                <span className="flex items-center text-success font-semibold">
-                  <TrendingDown className="h-4 w-4 mr-1" /> Easier
-                </span>
-              )}
-              {nextDifficulty === 'same' && (
-                <span className="flex items-center text-primary font-semibold">
-                  <Minus className="h-4 w-4 mr-1" /> Similar
-                </span>
-              )}
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="bg-success/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Correct</p>
-                <p className="text-xl font-bold text-success">{correct}/{currentAction?.trialCount || 8}</p>
-              </div>
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="text-xl font-bold text-primary">{score}</p>
-              </div>
-            </div>
-          </div>
-          <Button onClick={proceedToNextLevel} className="btn-primary w-full">
-            Continue to Level {spatialBandit.getOptimalLevel(buildContext())}
-          </Button>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextDifficulty as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: `${correct}/${currentAction?.trialCount ?? 8}`, tone: 'success' },
+          { label: 'Moves', value: totalMoves, tone: 'accent' },
+          { label: 'Score', value: score, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 
