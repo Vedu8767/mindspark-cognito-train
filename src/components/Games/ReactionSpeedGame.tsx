@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Zap, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { reactionBandit, ReactionContext, ReactionAction } from '@/lib/bandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface ReactionSpeedGameProps {
   onComplete: (score: number) => void;
@@ -16,7 +18,7 @@ interface Trial {
 }
 
 const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('reaction-speed');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
   const [gameState, setGameState] = useState<'waiting' | 'ready' | 'active' | 'result' | 'complete'>('waiting');
@@ -116,8 +118,9 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
   }, [buildContext]);
 
   useEffect(() => {
-    initializeLevel();
-  }, [currentLevel]);
+    if (progressLoaded) initializeLevel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLevel, progressLoaded]);
 
   useEffect(() => {
     if (gameState === 'waiting' && gameStarted && !levelComplete) {
@@ -244,8 +247,8 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     sessionStartRef.current = Date.now();
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameStarted(false);
     setGameState('waiting');
@@ -253,6 +256,29 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     bestReactionTimeRef.current = Infinity;
     sessionStartRef.current = Date.now();
     initializeLevel();
+  };
+
+  const succeededLevel = !!gameConfig &&
+    trials.filter(t => t.reactionTime && t.reactionTime > 0).length >= gameConfig.trialCount * 0.6;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+    setGameState('waiting');
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+    setGameState('waiting');
+    initializeLevel();
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   if (gameState === 'complete') {
