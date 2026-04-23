@@ -326,63 +326,27 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
   }
 
   if (levelComplete) {
-    const context = buildContext();
-    const nextLevelPrediction = reactionBandit.predictNextLevelDifficulty(context);
-    const performanceInsight = reactionBandit.getPerformanceInsight(context);
-    
-    const getPredictionStyles = () => {
-      switch (nextLevelPrediction) {
-        case 'harder':
-          return { bg: 'bg-success/20', text: 'text-success', icon: '🚀', label: 'Harder' };
-        case 'easier':
-          return { bg: 'bg-warning/20', text: 'text-warning', icon: '🛡️', label: 'Easier' };
-        default:
-          return { bg: 'bg-primary/20', text: 'text-primary', icon: '⚡', label: 'Same Level' };
-      }
-    };
-    
-    const predictionStyles = getPredictionStyles();
-    
+    const ctx = buildContext();
+    const prediction = reactionBandit.predictNextLevelDifficulty(ctx) as DifficultyPrediction;
+    const insight = reactionBandit.getPerformanceInsight(ctx);
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Zap className="h-10 w-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentLevel} Complete!</h2>
-            <p className="text-muted-foreground mb-4">
-              {performanceInsight}
-            </p>
-            
-            {/* Next Level Prediction */}
-            <div className={`${predictionStyles.bg} p-4 rounded-lg mb-4`}>
-              <div className="flex items-center justify-center gap-2">
-                <span className="text-2xl">{predictionStyles.icon}</span>
-                <div>
-                  <p className="text-sm text-muted-foreground">Next Level Will Be</p>
-                  <p className={`text-lg font-bold ${predictionStyles.text}`}>{predictionStyles.label}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Avg Time</p>
-                <p className="text-xl font-bold text-primary">{Math.round(avgReactionTime)}ms</p>
-              </div>
-              <div className="bg-accent/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="text-xl font-bold text-accent">{score}</p>
-              </div>
-            </div>
-            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Brain className="h-3 w-3" />
-              <span>Skill Level: {(banditStats.skillLevel * 100).toFixed(0)}% | Exploration: {(banditStats.epsilon * 100).toFixed(0)}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={prediction}
+        insight={`${insight} Avg ${Math.round(avgReactionTime)}ms.`}
+        stats={[
+          { label: 'Avg Time', value: `${Math.round(avgReactionTime)}ms`, tone: 'primary' },
+          { label: 'Trials', value: trials.length, tone: 'accent' },
+          { label: 'Early', value: earlyClicks, tone: 'success' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 

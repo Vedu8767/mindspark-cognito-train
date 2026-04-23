@@ -3,6 +3,8 @@ import { RotateCcw, Home, Trophy, Puzzle, Brain, TrendingUp, TrendingDown, Minus
 import { Button } from '@/components/ui/button';
 import { patternRecognitionBandit, PatternContext, PatternAction } from '@/lib/bandit/patternBandit';
 import { PerformanceMetrics } from '@/lib/bandit/types';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface Pattern {
   sequence: string[];
@@ -21,7 +23,7 @@ const NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'];
 
 const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(patternRecognitionBandit.getLevel());
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('pattern-recognition');
   const [currentPattern, setCurrentPattern] = useState(0);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<string>('');
@@ -278,17 +280,36 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     patternRecognitionBandit.setLevel(nextLevel);
   };
 
-  const proceedToNextLevel = () => {
-    const nextLevel = patternRecognitionBandit.getLevel();
-    setCurrentLevel(nextLevel);
-    setLevelComplete(false);
-    
-    // Get new action from bandit
+  const succeededLevel = patterns.length > 0 && correctAnswers / patterns.length >= 0.5;
+
+  const refreshLevelAction = () => {
     const context = getContext();
     const action = patternRecognitionBandit.selectAction(context);
     setCurrentAction(action);
     setLevelStartTime(Date.now());
     setPatternStartTime(Date.now());
+  };
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    patternRecognitionBandit.setLevel(currentLevel + 1);
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+    refreshLevelAction();
+  };
+
+  const handleReplay = async () => {
+    patternRecognitionBandit.setLevel(currentLevel);
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+    refreshLevelAction();
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    patternRecognitionBandit.setLevel(levelToSave);
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -305,9 +326,9 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setGameStarted(true);
   };
 
-  const restartGame = () => {
+  const restartGame = async () => {
     patternRecognitionBandit.reset();
-    setCurrentLevel(1);
+    await saveLevel(1);
     setScore(0);
     setGameStarted(false);
     setGameComplete(false);
