@@ -288,43 +288,23 @@ const TowerOfHanoiGame = ({ onComplete, onExit }: TowerOfHanoiGameProps) => {
 
   if (levelComplete) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6">
-          <div className="flex items-center justify-center gap-2">
-            <Trophy className="h-12 w-12 text-success" />
-            <Badge variant="outline" className="bg-primary/10">
-              <Brain className="h-3 w-3 mr-1" />
-              AI Adaptive
-            </Badge>
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level Complete!</h2>
-            <p className="text-muted-foreground mb-4">Score: {score}</p>
-            <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-              <div className="flex items-center justify-center gap-2">
-                {getDifficultyIcon()}
-                <span className="text-sm">
-                  Next level will be <span className="font-semibold">{nextDifficultyPrediction}</span>
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground italic">{performanceInsight}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="bg-muted/30 p-3 rounded-lg">
-              <p className="text-muted-foreground">Moves</p>
-              <p className="font-bold">{moves} / {minMoves} optimal</p>
-            </div>
-            <div className="bg-muted/30 p-3 rounded-lg">
-              <p className="text-muted-foreground">Efficiency</p>
-              <p className="font-bold">{Math.round((minMoves / Math.max(moves, 1)) * 100)}%</p>
-            </div>
-          </div>
-          <Button onClick={advanceToNextLevel} className="w-full btn-primary">
-            Continue to Level {towerOfHanoiBandit.getOptimalLevel(getContext())}
-          </Button>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={currentLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextDifficultyPrediction as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Moves', value: `${moves}/${minMoves}`, tone: 'accent' },
+          { label: 'Efficiency', value: `${Math.round((minMoves / Math.max(moves, 1)) * 100)}%`, tone: 'success' },
+          { label: 'Score', value: score, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && currentLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 
