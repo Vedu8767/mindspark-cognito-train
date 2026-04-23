@@ -187,6 +187,13 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     }
   }, [currentAction, generatePatterns]);
 
+  // Sync bandit internal level with persisted DB level once loaded.
+  useEffect(() => {
+    if (progressLoaded) {
+      patternRecognitionBandit.setLevel(currentLevel);
+    }
+  }, [progressLoaded, currentLevel]);
+
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);

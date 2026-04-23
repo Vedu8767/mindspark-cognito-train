@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Eye, Clock, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { visualProcessingBandit, type VisualContext, type VisualAction } from '@/lib/bandit/visualProcessingBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface VisualProcessingGameProps {
   onComplete: (score: number) => void;
@@ -29,7 +31,7 @@ const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'
 const SHAPES = ['circle', 'square', 'triangle', 'diamond'] as const;
 
 const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('visual-processing');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
   const [score, setScore] = useState(0);
@@ -198,16 +200,23 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
     setScore(prev => prev + accuracyBonus + timeBonus);
   };
 
-  const proceedToNextLevel = () => {
-    const context = getContext();
-    const nextLevel = visualProcessingBandit.getOptimalLevel(context);
-    
-    if (nextLevel > currentLevel && currentLevel >= 25) {
-      endGame();
-    } else {
-      setCurrentLevel(nextLevel);
-      setLevelComplete(false);
-    }
+  const succeededLevel = !!currentAction && correct / currentAction.trials >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -221,8 +230,8 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
     setTimeout(startTrial, 2000);
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);

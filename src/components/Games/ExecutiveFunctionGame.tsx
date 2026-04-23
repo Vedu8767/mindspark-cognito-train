@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { executiveFunctionBandit, type ExecutiveContext, type ExecutiveAction } from '@/lib/bandit/executiveFunctionBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface ExecutiveFunctionGameProps {
   onComplete: (score: number) => void;
@@ -24,7 +26,7 @@ const COLORS = ['red', 'blue', 'green', 'yellow', 'purple'];
 const COLOR_WORDS = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'PURPLE'];
 
 const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('executive-function');
   const [currentTask, setCurrentTask] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [score, setScore] = useState(0);
@@ -288,16 +290,23 @@ const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProp
     setScore(prev => prev + accuracyBonus + timeBonus);
   };
 
-  const proceedToNextLevel = () => {
-    const context = getContext();
-    const nextLevel = executiveFunctionBandit.getOptimalLevel(context);
-    
-    if (nextLevel > currentLevel && currentLevel >= 25) {
-      endGame();
-    } else {
-      setCurrentLevel(nextLevel);
-      setLevelComplete(false);
-    }
+  const succeededLevel = !!currentAction && correct / currentAction.taskCount >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -311,8 +320,8 @@ const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProp
     setLevelStartTime(Date.now());
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);
