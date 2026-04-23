@@ -7,6 +7,8 @@ import {
   AudioContext as AudioBanditContext, 
   AudioAction 
 } from '@/lib/bandit/audioMemoryBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface AudioMemoryGameProps {
   onComplete: (score: number) => void;
@@ -25,7 +27,7 @@ const TONES = [
 ];
 
 const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('audio-memory');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [sequence, setSequence] = useState<number[]>([]);
   const [userSequence, setUserSequence] = useState<number[]>([]);
@@ -240,14 +242,23 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
     setPerformanceInsight(insight);
   };
 
-  const advanceToNextLevel = () => {
-    // Always advance by exactly +1 (user choice). No silent jumps.
-    if (currentLevel >= 25) {
-      setGameComplete(true);
-      return;
-    }
-    setCurrentLevel(currentLevel + 1);
+  const succeededLevel = !!currentConfig && correct / Math.max(1, currentConfig.trialCount) >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
     setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const startGame = () => {
@@ -255,8 +266,8 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
     setStartTime(Date.now());
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);

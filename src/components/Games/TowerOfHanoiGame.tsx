@@ -7,6 +7,8 @@ import {
   HanoiContext, 
   HanoiAction 
 } from '@/lib/bandit/towerOfHanoiBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface TowerOfHanoiGameProps {
   onComplete: (score: number) => void;
@@ -14,7 +16,7 @@ interface TowerOfHanoiGameProps {
 }
 
 const TowerOfHanoiGame = ({ onComplete, onExit }: TowerOfHanoiGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('tower-of-hanoi');
   const [towers, setTowers] = useState<number[][]>([[], [], []]);
   const [selectedTower, setSelectedTower] = useState<number | null>(null);
   const [moves, setMoves] = useState(0);
@@ -190,14 +192,24 @@ const TowerOfHanoiGame = ({ onComplete, onExit }: TowerOfHanoiGameProps) => {
     setPerformanceInsight(insight);
   };
 
-  const advanceToNextLevel = () => {
-    // Always advance by exactly +1 (user choice). No silent jumps.
-    if (currentLevel >= 25) {
-      setGameComplete(true);
-      return;
-    }
-    setCurrentLevel(currentLevel + 1);
+  // Did the user actually solve the puzzle this round?
+  const succeededLevel = !!currentConfig && towers[2]?.length === currentConfig.diskCount;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
     setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const startGame = () => {
@@ -205,8 +217,8 @@ const TowerOfHanoiGame = ({ onComplete, onExit }: TowerOfHanoiGameProps) => {
     setStartTime(Date.now());
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);

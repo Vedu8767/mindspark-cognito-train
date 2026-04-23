@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Zap, Clock, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { processingSpeedBandit, type ProcessingContext, type ProcessingAction } from '@/lib/bandit/processingSpeedBandit';
+import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface ProcessingSpeedGameProps {
   onComplete: (score: number) => void;
@@ -29,7 +31,7 @@ const SYMBOLS = ['★', '●', '■', '▲', '♦', '♠', '♥', '♣', '◆', 
 const CODES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C'];
 
 const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) => {
-  const [currentLevel, setCurrentLevel] = useState(1);
+  const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('processing-speed');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
   const [score, setScore] = useState(0);
@@ -242,16 +244,24 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
     processingSpeedBandit.updateModel(context, currentAction, reward, metrics);
   };
 
-  const proceedToNextLevel = () => {
-    const context = buildContext();
-    const nextLevel = processingSpeedBandit.getOptimalLevel(context);
-    
-    if (nextLevel > 25 || (currentLevel >= 25 && totalCorrect > (currentAction?.trialCount || 8) * (currentAction?.gridSize || 12) * 0.7)) {
-      endGame();
-    } else {
-      setCurrentLevel(nextLevel);
-      setLevelComplete(false);
-    }
+  const succeededLevel = !!currentAction &&
+    totalCorrect / Math.max(1, currentAction.trialCount * currentAction.gridSize) >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (currentLevel >= 25) return;
+    await saveLevel(currentLevel + 1, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(currentLevel, { incrementSessions: true });
+    setLevelComplete(false);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -264,8 +274,8 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
     setTrialStartTime(Date.now());
   };
 
-  const restartGame = () => {
-    setCurrentLevel(1);
+  const restartGame = async () => {
+    await saveLevel(1);
     setScore(0);
     setGameComplete(false);
     setGameStarted(false);
