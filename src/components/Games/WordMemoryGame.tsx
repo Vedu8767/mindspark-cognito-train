@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { wordMemoryBandit, type WordMemoryContext, type WordMemoryAction } from '@/lib/bandit/wordMemoryBandit';
 import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface WordMemoryGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: any) => void;
   onExit: () => void;
 }
 
@@ -35,6 +36,7 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
   const [banditStats, setBanditStats] = useState(wordMemoryBandit.getStats());
   const [nextLevelPrediction, setNextLevelPrediction] = useState<'easier' | 'same' | 'harder'>('same');
   const [performanceInsight, setPerformanceInsight] = useState('');
+  const evaluatedRef = useRef(false);
 
   // Restore the persisted bandit level on mount.
   useEffect(() => {
@@ -104,7 +106,8 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
 
   const handleWordSubmit = () => {
     const word = userInput.trim().toUpperCase();
-    if (word && !recalledWords.includes(word)) {
+    if (!word) return;
+    if (!recalledWords.includes(word)) {
       setRecalledWords(prev => [...prev, word]);
       setUserInput('');
     }
@@ -112,11 +115,19 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       handleWordSubmit();
     }
   };
 
+  const finishRecallNow = () => {
+    if (evaluatedRef.current) return;
+    evaluatedRef.current = true;
+    evaluateResults();
+  };
+
   const evaluateResults = () => {
+    evaluatedRef.current = true;
     const correct: string[] = [];
     const incorrect: string[] = [];
     
@@ -181,14 +192,46 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
     return bonus;
   };
 
-  const nextLevel = () => {
-    saveLevel(wordMemoryBandit.getStats().currentLevel, { incrementSessions: true });
-    setLevelsCompleted(prev => prev + 1);
-    if (levelsCompleted >= 4) {
-      completeGame();
-    } else {
-      setGamePhase('instructions');
-    }
+  const succeededLevel =
+    wordsToStudy.length > 0 && correctWords.length / wordsToStudy.length >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (!progressLoaded) return;
+    if (savedLevel >= 25) return;
+    const newLevel = savedLevel + 1;
+    await saveLevel(newLevel, { incrementSessions: true });
+    wordMemoryBandit.setLevel(newLevel);
+    setBanditStats(wordMemoryBandit.getStats());
+    evaluatedRef.current = false;
+    setRecalledWords([]);
+    setCorrectWords([]);
+    setIncorrectWords([]);
+    setUserInput('');
+    setGamePhase('instructions');
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(savedLevel, { incrementSessions: true });
+    evaluatedRef.current = false;
+    setRecalledWords([]);
+    setCorrectWords([]);
+    setIncorrectWords([]);
+    setUserInput('');
+    setGamePhase('instructions');
+  };
+
+  const handleSaveAndExit = async () => {
+    const target = succeededLevel && savedLevel < 25 ? savedLevel + 1 : savedLevel;
+    await saveLevel(target, { incrementSessions: true });
+    const duration = Math.round((Date.now() - levelStartTime) / 1000);
+    onComplete({
+      score,
+      level: savedLevel,
+      duration,
+      completed: succeededLevel,
+      difficulty: 'Adaptive',
+      accuracy: wordsToStudy.length > 0 ? correctWords.length / wordsToStudy.length : 0,
+    });
   };
 
   const completeGame = () => {
@@ -389,6 +432,13 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
                   Add Word
                 </Button>
               </div>
+
+              <div className="flex justify-center">
+                <Button onClick={finishRecallNow} variant="secondary">
+                  <Check className="h-4 w-4 mr-2" />
+                  I'm Done — Submit
+                </Button>
+              </div>
               
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">
@@ -424,90 +474,24 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
   }
 
   if (gamePhase === 'results' && currentAction) {
-    const missedWords = wordsToStudy.filter(word => !correctWords.includes(word));
-    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-2xl w-full space-y-6">
-          <div className="text-center">
-            <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center mb-4">
-              <Brain className="h-10 w-10 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentAction.level} Complete!</h2>
-            <p className="text-muted-foreground">Here's how you did:</p>
-          </div>
-
-          {/* AI Insight */}
-          <div className={`bg-gradient-to-r ${getDifficultyColor()} p-4 rounded-lg border`}>
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="h-4 w-4 text-purple-400" />
-              <span className="text-sm font-medium text-foreground">AI Analysis</span>
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">{performanceInsight}</p>
-            <div className="flex items-center gap-2">
-              {getDifficultyIcon()}
-              <span className="text-sm text-muted-foreground">
-                Next level will be <span className="font-medium text-foreground">{nextLevelPrediction}</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-success/10 p-4 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground">Correct</p>
-              <p className="text-2xl font-bold text-success">{correctWords.length}</p>
-            </div>
-            <div className="bg-destructive/10 p-4 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground">Incorrect</p>
-              <p className="text-2xl font-bold text-destructive">{incorrectWords.length}</p>
-            </div>
-            <div className="bg-primary/10 p-4 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground">Score</p>
-              <p className="text-2xl font-bold text-primary">{score}</p>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-lg font-semibold text-success mb-3">✅ Correct Words</h3>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {correctWords.map((word, index) => (
-                  <div key={index} className="p-2 bg-success/10 rounded text-success font-medium">
-                    {word}
-                  </div>
-                ))}
-                {correctWords.length === 0 && (
-                  <p className="text-muted-foreground text-sm">None</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-muted-foreground mb-3">❌ Missed Words</h3>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {missedWords.map((word, index) => (
-                  <div key={index} className="p-2 bg-muted/10 rounded text-muted-foreground font-medium">
-                    {word}
-                  </div>
-                ))}
-                {missedWords.length === 0 && (
-                  <p className="text-muted-foreground text-sm">None - Perfect!</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex space-x-4">
-            <Button onClick={nextLevel} className="flex-1 btn-primary">
-              {levelsCompleted >= 4 ? 'Complete Game' : 'Next Level'}
-            </Button>
-            <Button onClick={onExit} variant="outline">
-              <Home className="h-4 w-4 mr-2" />
-              Exit
-            </Button>
-          </div>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={savedLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextLevelPrediction as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: `${correctWords.length}/${wordsToStudy.length}`, tone: 'success' },
+          { label: 'Missed', value: incorrectWords.length, tone: 'accent' },
+          { label: 'Score', value: score, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && savedLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 

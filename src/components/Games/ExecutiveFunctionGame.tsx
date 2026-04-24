@@ -70,13 +70,14 @@ const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProp
   }, [currentLevel, correct, currentTask, responseTimes, tasks.length, taskTypeStats, levelStartTime]);
 
   useEffect(() => {
-    if (gameStarted && !levelComplete && !gameComplete) {
+    if (gameStarted && !levelComplete && !gameComplete && tasks.length === 0) {
       const context = getContext();
       const action = executiveFunctionBandit.selectAction(context);
       setCurrentAction(action);
       generateTasks(action);
     }
-  }, [currentLevel, gameStarted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLevel, gameStarted, tasks.length, levelComplete, gameComplete]);
 
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
@@ -296,17 +297,39 @@ const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProp
     if (currentLevel >= 25) return;
     await saveLevel(currentLevel + 1, { incrementSessions: true });
     setLevelComplete(false);
+    setTasks([]);
+    setCurrentTask(0);
+    setCorrect(0);
+    setResponseTimes([]);
+    setTaskTypeStats({});
+    setCurrentAction(null);
+    setTimeLeft(0);
   };
 
   const handleReplay = async () => {
     await saveLevel(currentLevel, { incrementSessions: true });
     setLevelComplete(false);
+    setTasks([]);
+    setCurrentTask(0);
+    setCorrect(0);
+    setResponseTimes([]);
+    setTaskTypeStats({});
+    setCurrentAction(null);
+    setTimeLeft(0);
   };
 
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    const duration = Math.round((Date.now() - levelStartTime) / 1000);
+    (onComplete as any)({
+      score,
+      level: currentLevel,
+      duration,
+      completed: succeededLevel,
+      difficulty: 'Adaptive',
+      accuracy: currentAction ? correct / currentAction.taskCount : 0,
+    });
   };
 
   const endGame = () => {

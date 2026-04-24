@@ -13,8 +13,25 @@ import AchievementToast from '@/components/AchievementToast';
 import { checkGameAchievements, addGameHistory, type Achievement } from '@/lib/achievements';
 import { soundManager } from '@/lib/soundManager';
 
+/** Payload each game sends back when the user explicitly chooses Save & Exit. */
+export interface GameCompletionPayload {
+  score: number;
+  level: number;
+  duration: number; // seconds played in this session
+  completed: boolean;
+  difficulty?: string;
+  accuracy?: number;
+  reactionTime?: number;
+  moves?: number;
+}
+
+type GameComponentProps = {
+  onComplete: (payload: GameCompletionPayload | number) => void;
+  onExit: () => void;
+};
+
 // Lazy-loaded game components at module scope
-const LAZY_GAMES: Record<string, ComponentType<{ onComplete: (score: number) => void; onExit: () => void }>> = {
+const LAZY_GAMES: Record<string, ComponentType<GameComponentProps>> = {
   'memory-matching': lazy(() => import('@/components/Games/MemoryMatchingGame')),
   'attention-focus': lazy(() => import('@/components/Games/AttentionFocusGame')),
   'reaction-speed': lazy(() => import('@/components/Games/ReactionSpeedGame')),
@@ -67,27 +84,33 @@ const AppLayout = () => {
     return () => window.removeEventListener('startGame', handleStartGame);
   }, []);
 
-  const handleGameComplete = (score: number) => {
+  const handleGameComplete = (payload: GameCompletionPayload | number) => {
     const gameId = currentGame || '';
     const meta = GAME_META[gameId] || { name: gameId, domain: 'memory' };
+
+    // Backwards-compat: some games still call onComplete(score). Normalize.
+    const data: GameCompletionPayload =
+      typeof payload === 'number'
+        ? { score: payload, level: 1, duration: 0, completed: true, difficulty: 'Adaptive' }
+        : { difficulty: 'Adaptive', ...payload };
 
     addGameHistory({
       gameId,
       gameName: meta.name,
-      score,
-      level: 1,
-      duration: 60,
-      completed: true,
+      score: data.score,
+      level: data.level,
+      duration: data.duration,
+      completed: data.completed,
       domain: meta.domain,
-      difficulty: 'Adaptive',
+      difficulty: data.difficulty || 'Adaptive',
     });
 
     const newlyUnlocked = checkGameAchievements({
       gameId,
-      score,
-      level: 1,
-      duration: 60,
-      completed: true,
+      score: data.score,
+      level: data.level,
+      duration: data.duration,
+      completed: data.completed,
     });
 
     if (newlyUnlocked.length > 0) {
@@ -97,7 +120,7 @@ const AppLayout = () => {
       soundManager.victory();
     }
 
-    console.log(`Game completed with score: ${score}`);
+    console.log(`[AppLayout] ${gameId} completed`, data);
     setCurrentGame(null);
     setCurrentPage('games');
   };

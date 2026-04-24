@@ -1,89 +1,135 @@
+## Plan
 
+### 1. Repair the backend progress path first
+Create a database migration to remove the row-level security recursion that is breaking `game_progress` reads/writes.
 
-## Problem Analysis
+- Add security-definer helper functions for doctor access checks instead of joining `profiles` inside policies.
+- Rewrite the doctor-view policies on:
+  - `profiles`
+  - `game_progress`
+  - `game_sessions`
+- Keep patient self-access policies unchanged.
 
-After reviewing the codebase, three concrete issues are causing the broken game experience:
+Result: `useGameProgress()` will load the correct saved level for the logged-in user instead of silently falling back to level 1.
 
-### 1. "Hit Enter ends Level 1 immediately"
-Several games (Math Challenge, Word Memory, etc.) have an answer-input field with an Enter-to-submit handler. When the user presses Enter on an empty/zero input, it counts as a wrong answer, the timer or problem index advances, and the level instantly ends because `levelComplete` triggers from a side-effect (e.g. `currentProblem >= problemCount` or `timeLeft === 0` after a stale state). The MemoryMatching `useEffect` on `matches === symbolCount` also fires once on the first match if `symbolCount` was set to `1` for low levels.
+### 2. Standardize level completion flow in the remaining broken games
+Refactor the affected games so they all use the same progression contract:
 
-### 2. "Game auto-jumps to next level — user has no choice"
-In `MemoryMatchingGame.endGame()` (lines 204-216) and most other games, completing a level **automatically** does `setCurrentLevel(currentLevel + 1)` AND **also** calls `onComplete(score)` after a 1-second timeout, which in `AppLayout.handleGameComplete` exits the entire game and returns to the games grid. So the user never gets to choose "Save & Exit", "Replay", or "Next Level".
+- Finish level -> show `LevelCompleteScreen`
+- Buttons:
+  - Next Level
+  - Replay
+  - Save & Exit
+- No auto-advance
+- No hidden fallback “complete” screen that bypasses the level-complete UI
+- Next/Replay must fully reinitialize that level’s state
 
-### 3. "RL says 'next will be harder' randomly"
-Two root causes:
-- The bandit predictions (`predictNextLevelDifficulty`) ARE based on `metrics.accuracy`, `timeEfficiency`, and history average reward — but the **`PerformanceMetrics` passed in is computed from a single just-finished session** that often has incomplete data (e.g. `timeEfficiency = timeLeft / 120` even if the time limit was 60s, `accuracy = 0` when no moves were recorded).
-- The displayed prediction text in some games (e.g. ReactionSpeedGame) uses a default `'harder'` state that never gets updated after the first session because the `nextLevelPrediction` state is set BEFORE the bandit update runs.
-- Bandit state is stored in a single global `localStorage` key (`epsilonGreedyBandit`) shared across ALL users on the same device.
+Affected games:
+- Reaction Speed
+- Visual Processing
+- Executive Function
+- Word Memory
+- Math Challenge
+- Spatial Navigation
+- Processing Speed
+- Audio Memory
+- Tower of Hanoi
 
-### 4. "Resume from where left off" doesn't work
-Level state is stored only in browser `localStorage` (e.g. `memoryGameLevel`) and only for MemoryMatching. Other games reset to level 1 every time. Nothing is per-user or persisted in the database.
+### 3. Fix each reported gameplay bug
 
----
+#### Reaction Speed
+- Remove the separate `gameState === 'complete'` end screen that currently overrides `LevelCompleteScreen`.
+- Keep the game on the level-complete screen until the user chooses what to do.
+- Ensure Next Level reinitializes trials and does not get stuck.
 
-## Proposed Solution
+#### Visual Processing
+- Refactor level initialization so Start Level 1 does not immediately fall into completion.
+- Reset `currentTrial`, `timeLeft`, `showTarget`, `responseTimes`, and action state on Next/Replay.
+- Ensure Next Level starts a fresh round instead of staying on a dead state.
 
-### A. Add a `game_progress` table (per user, per game)
-```text
-game_progress
-├── user_id (FK auth.users)
-├── game_id (text)
-├── current_level (int, default 1)
-├── highest_level (int, default 1)
-├── total_sessions (int)
-├── last_played_at (timestamptz)
-└── UNIQUE(user_id, game_id) + RLS (own + assigned doctors)
-```
-Replaces all `localStorage.getItem('xxxGameLevel')` with `getProgress(userId, gameId)` / `saveProgress(...)`. New users start at level 1; returning users resume exactly where they left off.
+#### Executive Function
+- End the level immediately when the last task is answered.
+- Remove the requirement to wait for the timer after tasks are done.
+- Fix Save & Exit to use the shared completion flow.
 
-### B. Fix the auto-progression — give the user the choice
-In every game's "Level Complete" screen, replace the auto-`onComplete` call (the `setTimeout(() => onComplete(score), 1000)`) with a manual choice screen showing **three buttons**:
-1. **Continue to Next Level →** (advances `current_level`, restarts game on new level)
-2. **Replay This Level** (re-initializes same level)
-3. **Save & Exit** (saves progress to DB, then calls `onComplete` to return to game grid)
+#### Word Memory
+- Replace the old custom results screen with `LevelCompleteScreen`.
+- End immediately once the recall phase is finished instead of forcing the user to sit through leftover timer time.
+- Add Save & Exit and Replay support.
+- Guard Enter submission so it only submits valid input and doesn’t create accidental transitions.
 
-The user must click a button — no auto-exit, no auto-advance.
+#### Math Challenge
+- Replace the old custom level-end UI with `LevelCompleteScreen`.
+- Add Save & Exit and Replay support.
+- Keep the input/answer guards so double-submits cannot skip levels.
 
-### C. Fix the "hit Enter ends level" bug
-For text-input games (MathChallenge, WordMemory, etc.):
-- Block submit when input is empty/whitespace
-- Block submit while `levelComplete` or `gameComplete` is true
-- Add an `isProcessing` ref to debounce double-submits
-- Wrap inputs in a `<form onSubmit>` with `e.preventDefault()` so Enter doesn't trigger anything else
+#### Spatial Navigation
+- Add keyboard arrow-key movement in addition to the on-screen buttons.
+- Make sure movement only works during the navigation phase.
+- Keep level completion tied to actual target reach, not timer expiration alone.
 
-For MemoryMatching: ensure `symbolCount >= 2` in the action space, and gate the match-complete `useEffect` on `gameStarted === true`.
+#### Processing Speed
+- Fix Save & Exit to persist level and then return cleanly.
+- Ensure Next/Replay reset inputs, current trial, and timer correctly.
 
-### D. Make the RL prediction actually reflect performance
-- Compute `PerformanceMetrics` AFTER the session is fully finalized (move the bandit update into a `useEffect` keyed on `gameComplete` so all state is settled).
-- Set `nextLevelPrediction` from the bandit's `predictNextLevelDifficulty(metrics)` **after** `updateBandit` runs, and only show it on the level-complete screen — never as a default/random initial value.
-- Display a short "why" string from the bandit (e.g. "Accuracy 92% with 30s left → next level will be harder") so the user sees it's data-driven.
-- Namespace the bandit `localStorage` key by `user_id` so different users don't share state on the same device.
+#### Audio Memory
+- Make the cues easier to understand by showing visible labels/colors for each tone during playback and repeat.
+- Keep replay available when the current difficulty allows it.
+- Fix Save & Exit and Next Level resets so sequence/game phase do not get stuck.
 
-### E. Apply consistently across all 12 games
-The same end-game flow + Enter-key fix + per-user progress table will be wired into each game component via a small shared helper (`useGameProgress(gameId)` hook + a reusable `<LevelCompleteScreen>` component) so the fix is uniform and not copy-pasted.
+#### Tower of Hanoi
+- Fix Next Level and Save & Exit so they both persist progress and fully rebuild the towers for the next round.
+- Keep `LevelCompleteScreen` as the only post-level UI.
 
----
+### 4. Remove fake stats and mixed user data
+Replace the remaining hardcoded/shared data sources that still make the app look fake or cross-user.
 
-## Files to Change
+- `AppLayout.tsx`
+  - Stop recording every finished game as `level: 1`, `duration: 60`, `difficulty: 'Adaptive'`.
+  - Pass real session payload from each game: score, level, duration, difficulty, completion state, optional metrics.
+- `Games.tsx`
+  - Replace hardcoded `lastScore`, `improvement`, and difficulty labels with per-user data from the backend.
+  - Show each signed-in user only their own latest session/progress.
+- Local fallback keys
+  - Namespace fallback/local storage by user id where fallback is still needed so one user never sees another user’s progress on the same device.
 
-**New**
-- `supabase/migrations/<timestamp>_game_progress.sql` — table + RLS
-- `src/lib/gameProgressService.ts` — `getProgress`, `saveProgress`, `incrementLevel`
-- `src/hooks/useGameProgress.ts` — React hook for the above
-- `src/components/Games/LevelCompleteScreen.tsx` — shared 3-button screen with bandit insight
+### 5. Make progression and score reporting consistent
+Unify what each game reports when a level ends.
 
-**Modified (12 game files + bandit)**
-- All 12 `src/components/Games/*Game.tsx` — replace auto-progress with `<LevelCompleteScreen>`, fix Enter-key/double-submit guards, use `useGameProgress` instead of localStorage
-- `src/lib/bandit/epsilonGreedy.ts` and the 11 sibling bandits — namespace storage key by `user_id`, expose `predictNextLevelDifficulty` based on real last-session metrics
-- `src/components/Layout/AppLayout.tsx` — `handleGameComplete` no longer fires on level end, only on explicit "Save & Exit"
+Each game should produce real values for:
+- current level
+- completed status
+- duration
+- score
+- difficulty/config used
+- optional accuracy / moves / reaction time
 
----
+This will keep the dashboard, history, achievements, and doctor-facing data correct per user.
 
-## What the user will experience after the fix
+## Technical details
 
-1. Press Enter on an empty math input → nothing happens (no accidental level-end).
-2. Finish a level → see a screen with **Next Level / Replay / Save & Exit** + an AI insight like "92% accuracy, fast solves → next level will be harder".
-3. Click **Save & Exit** → leaves to games grid, progress saved.
-4. Re-enter the same game tomorrow → resumes at the saved level (per-user, from DB).
-5. The "harder/easier/same" prediction always reflects YOUR last-session metrics, never a random default.
+### Files to update
+- `supabase/migrations/...sql`
+- `src/lib/gameProgressService.ts`
+- `src/components/Layout/AppLayout.tsx`
+- `src/pages/Games.tsx`
+- `src/lib/achievements.ts` (or shared history/persistence helpers)
+- `src/components/Games/ReactionSpeedGame.tsx`
+- `src/components/Games/VisualProcessingGame.tsx`
+- `src/components/Games/ExecutiveFunctionGame.tsx`
+- `src/components/Games/WordMemoryGame.tsx`
+- `src/components/Games/MathChallengeGame.tsx`
+- `src/components/Games/SpatialNavigationGame.tsx`
+- `src/components/Games/ProcessingSpeedGame.tsx`
+- `src/components/Games/AudioMemoryGame.tsx`
+- `src/components/Games/TowerOfHanoiGame.tsx`
 
+### Acceptance criteria
+- Progress loads from the backend without recursion errors.
+- Re-entering a game resumes that user’s saved level.
+- One user never sees another user’s scores/history/progress.
+- Reaction Speed and Visual Processing no longer end immediately on start.
+- Executive Function and Word Memory end as soon as tasks are actually finished.
+- Math, Word, Processing, Audio, and Tower all support working Next / Replay / Save & Exit.
+- Spatial keyboard arrows work.
+- Game cards and session history show real per-user values instead of hardcoded placeholders.
