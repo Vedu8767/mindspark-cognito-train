@@ -232,13 +232,8 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     
     console.log(`[ReactionGame] Level ${currentLevel} complete. Reward: ${reward.toFixed(1)}, Avg RT: ${avgRT.toFixed(0)}ms`);
     
-    // Determine next level using bandit
-    const optimalLevel = reactionBandit.getOptimalLevel(context);
-    
-    // Show level-complete screen so the user explicitly chooses Next / Replay / Exit.
-    setTimeout(() => {
-      setGameState('complete');
-    }, 800);
+    // Show LevelCompleteScreen — user explicitly chooses Next / Replay / Save & Exit.
+    // We do NOT auto-transition to a separate "complete" screen.
   };
 
   const startGame = () => {
@@ -265,12 +260,23 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     if (currentLevel >= 25) return;
     await saveLevel(currentLevel + 1, { incrementSessions: true });
     setLevelComplete(false);
+    setCurrentTrial(0);
+    setTrials([]);
+    setEarlyClicks(0);
+    reactionTimesRef.current = [];
     setGameState('waiting');
+    levelStartRef.current = Date.now();
+    // initializeLevel runs via useEffect when currentLevel changes
   };
 
   const handleReplay = async () => {
     await saveLevel(currentLevel, { incrementSessions: true });
     setLevelComplete(false);
+    setCurrentTrial(0);
+    setTrials([]);
+    setEarlyClicks(0);
+    reactionTimesRef.current = [];
+    levelStartRef.current = Date.now();
     setGameState('waiting');
     initializeLevel();
   };
@@ -278,7 +284,18 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
+    (onComplete as any)({
+      score,
+      level: currentLevel,
+      duration,
+      completed: succeededLevel,
+      difficulty: 'Adaptive',
+      reactionTime: avgReactionTime,
+      accuracy: trials.length > 0
+        ? trials.filter(t => t.reactionTime && t.reactionTime > 0).length / trials.length
+        : 0,
+    });
   };
 
   if (gameState === 'complete') {
