@@ -432,6 +432,13 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
                   Add Word
                 </Button>
               </div>
+
+              <div className="flex justify-center">
+                <Button onClick={finishRecallNow} variant="secondary">
+                  <Check className="h-4 w-4 mr-2" />
+                  I'm Done — Submit
+                </Button>
+              </div>
               
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">
