@@ -68,13 +68,17 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
   }, [currentLevel, correct, currentTrial, responseTimes, trials.length, levelStartTime]);
 
   useEffect(() => {
-    if (gameStarted && !levelComplete && !gameComplete) {
+    // Only generate a new round when there is no active round in flight.
+    // Without the trials.length===0 guard, re-renders after a single click
+    // can regenerate the action and immediately trigger completion.
+    if (gameStarted && !levelComplete && !gameComplete && trials.length === 0) {
       const context = getContext();
       const action = visualProcessingBandit.selectAction(context);
       setCurrentAction(action);
       generateTrials(action);
     }
-  }, [currentLevel, gameStarted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLevel, gameStarted, trials.length, levelComplete, gameComplete]);
 
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
@@ -206,17 +210,39 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
     if (currentLevel >= 25) return;
     await saveLevel(currentLevel + 1, { incrementSessions: true });
     setLevelComplete(false);
+    setTrials([]);
+    setCurrentTrial(0);
+    setCorrect(0);
+    setShowTarget(true);
+    setResponseTimes([]);
+    setCurrentAction(null);
+    setTimeLeft(0);
   };
 
   const handleReplay = async () => {
     await saveLevel(currentLevel, { incrementSessions: true });
     setLevelComplete(false);
+    setTrials([]);
+    setCurrentTrial(0);
+    setCorrect(0);
+    setShowTarget(true);
+    setResponseTimes([]);
+    setCurrentAction(null);
+    setTimeLeft(0);
   };
 
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    const duration = Math.round((Date.now() - levelStartTime) / 1000);
+    (onComplete as any)({
+      score,
+      level: currentLevel,
+      duration,
+      completed: succeededLevel,
+      difficulty: 'Adaptive',
+      accuracy: currentAction ? correct / currentAction.trials : 0,
+    });
   };
 
   const endGame = () => {
