@@ -467,90 +467,24 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
   }
 
   if (gamePhase === 'results' && currentAction) {
-    const missedWords = wordsToStudy.filter(word => !correctWords.includes(word));
-    
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-2xl w-full space-y-6">
-          <div className="text-center">
-            <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center mb-4">
-              <Brain className="h-10 w-10 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentAction.level} Complete!</h2>
-            <p className="text-muted-foreground">Here's how you did:</p>
-          </div>
-
-          {/* AI Insight */}
-          <div className={`bg-gradient-to-r ${getDifficultyColor()} p-4 rounded-lg border`}>
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="h-4 w-4 text-purple-400" />
-              <span className="text-sm font-medium text-foreground">AI Analysis</span>
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">{performanceInsight}</p>
-            <div className="flex items-center gap-2">
-              {getDifficultyIcon()}
-              <span className="text-sm text-muted-foreground">
-                Next level will be <span className="font-medium text-foreground">{nextLevelPrediction}</span>
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="bg-success/10 p-4 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground">Correct</p>
-              <p className="text-2xl font-bold text-success">{correctWords.length}</p>
-            </div>
-            <div className="bg-destructive/10 p-4 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground">Incorrect</p>
-              <p className="text-2xl font-bold text-destructive">{incorrectWords.length}</p>
-            </div>
-            <div className="bg-primary/10 p-4 rounded-lg text-center">
-              <p className="text-sm text-muted-foreground">Score</p>
-              <p className="text-2xl font-bold text-primary">{score}</p>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-lg font-semibold text-success mb-3">✅ Correct Words</h3>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {correctWords.map((word, index) => (
-                  <div key={index} className="p-2 bg-success/10 rounded text-success font-medium">
-                    {word}
-                  </div>
-                ))}
-                {correctWords.length === 0 && (
-                  <p className="text-muted-foreground text-sm">None</p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-muted-foreground mb-3">❌ Missed Words</h3>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {missedWords.map((word, index) => (
-                  <div key={index} className="p-2 bg-muted/10 rounded text-muted-foreground font-medium">
-                    {word}
-                  </div>
-                ))}
-                {missedWords.length === 0 && (
-                  <p className="text-muted-foreground text-sm">None - Perfect!</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex space-x-4">
-            <Button onClick={nextLevel} className="flex-1 btn-primary">
-              {levelsCompleted >= 4 ? 'Complete Game' : 'Next Level'}
-            </Button>
-            <Button onClick={onExit} variant="outline">
-              <Home className="h-4 w-4 mr-2" />
-              Exit
-            </Button>
-          </div>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={savedLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextLevelPrediction as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: `${correctWords.length}/${wordsToStudy.length}`, tone: 'success' },
+          { label: 'Missed', value: incorrectWords.length, tone: 'accent' },
+          { label: 'Score', value: score, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && savedLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 
