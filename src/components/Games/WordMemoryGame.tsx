@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { wordMemoryBandit, type WordMemoryContext, type WordMemoryAction } from '@/lib/bandit/wordMemoryBandit';
 import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface WordMemoryGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: any) => void;
   onExit: () => void;
 }
 
@@ -35,6 +36,7 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
   const [banditStats, setBanditStats] = useState(wordMemoryBandit.getStats());
   const [nextLevelPrediction, setNextLevelPrediction] = useState<'easier' | 'same' | 'harder'>('same');
   const [performanceInsight, setPerformanceInsight] = useState('');
+  const evaluatedRef = useRef(false);
 
   // Restore the persisted bandit level on mount.
   useEffect(() => {
@@ -104,7 +106,8 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
 
   const handleWordSubmit = () => {
     const word = userInput.trim().toUpperCase();
-    if (word && !recalledWords.includes(word)) {
+    if (!word) return;
+    if (!recalledWords.includes(word)) {
       setRecalledWords(prev => [...prev, word]);
       setUserInput('');
     }
@@ -112,11 +115,19 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
+      e.preventDefault();
       handleWordSubmit();
     }
   };
 
+  const finishRecallNow = () => {
+    if (evaluatedRef.current) return;
+    evaluatedRef.current = true;
+    evaluateResults();
+  };
+
   const evaluateResults = () => {
+    evaluatedRef.current = true;
     const correct: string[] = [];
     const incorrect: string[] = [];
     
@@ -181,14 +192,46 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
     return bonus;
   };
 
-  const nextLevel = () => {
-    saveLevel(wordMemoryBandit.getStats().currentLevel, { incrementSessions: true });
-    setLevelsCompleted(prev => prev + 1);
-    if (levelsCompleted >= 4) {
-      completeGame();
-    } else {
-      setGamePhase('instructions');
-    }
+  const succeededLevel =
+    wordsToStudy.length > 0 && correctWords.length / wordsToStudy.length >= 0.5;
+
+  const handleNextLevel = async () => {
+    if (!progressLoaded) return;
+    if (savedLevel >= 25) return;
+    const newLevel = savedLevel + 1;
+    await saveLevel(newLevel, { incrementSessions: true });
+    wordMemoryBandit.setLevel(newLevel);
+    setBanditStats(wordMemoryBandit.getStats());
+    evaluatedRef.current = false;
+    setRecalledWords([]);
+    setCorrectWords([]);
+    setIncorrectWords([]);
+    setUserInput('');
+    setGamePhase('instructions');
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(savedLevel, { incrementSessions: true });
+    evaluatedRef.current = false;
+    setRecalledWords([]);
+    setCorrectWords([]);
+    setIncorrectWords([]);
+    setUserInput('');
+    setGamePhase('instructions');
+  };
+
+  const handleSaveAndExit = async () => {
+    const target = succeededLevel && savedLevel < 25 ? savedLevel + 1 : savedLevel;
+    await saveLevel(target, { incrementSessions: true });
+    const duration = Math.round((Date.now() - levelStartTime) / 1000);
+    onComplete({
+      score,
+      level: savedLevel,
+      duration,
+      completed: succeededLevel,
+      difficulty: 'Adaptive',
+      accuracy: wordsToStudy.length > 0 ? correctWords.length / wordsToStudy.length : 0,
+    });
   };
 
   const completeGame = () => {
