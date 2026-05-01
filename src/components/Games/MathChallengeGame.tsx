@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RotateCcw, Home, Trophy, Calculator, Timer, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { RotateCcw, Home, Trophy, Calculator, Timer, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { mathChallengeBandit, type MathContext, type MathAction } from '@/lib/bandit/mathChallengeBandit';
 import { useGameProgress } from '@/hooks/useGameProgress';
+import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface MathChallengeGameProps {
   onComplete: (score: number) => void;
@@ -230,16 +231,36 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
     }
   };
 
-  const nextLevel = () => {
-    // Persist the new bandit level to DB so the user resumes here next session.
-    saveLevel(mathChallengeBandit.getStats().currentLevel, { incrementSessions: true });
-    setLevelsCompleted(prev => prev + 1);
-    if (levelsCompleted >= 4) {
-      endGame();
-    } else {
-      setLevelComplete(false);
-      setGameStarted(false);
-    }
+  // Did the user pass this round (>=50% correct)?
+  const succeededLevel = !!currentAction && correct >= Math.ceil(currentAction.problemCount * 0.5);
+
+  const startNextRound = (newAction: MathAction) => {
+    setCurrentAction(newAction);
+    generateProblems(newAction);
+    setProblemStartTime(Date.now());
+    setBanditStats(mathChallengeBandit.getStats());
+  };
+
+  const handleNextLevel = async () => {
+    const newLevel = Math.min(25, savedLevel + 1);
+    mathChallengeBandit.setLevel(newLevel);
+    await saveLevel(newLevel, { incrementSessions: true });
+    setLevelComplete(false);
+    const action = mathChallengeBandit.selectAction(getContext());
+    startNextRound(action);
+  };
+
+  const handleReplay = async () => {
+    await saveLevel(savedLevel, { incrementSessions: true });
+    setLevelComplete(false);
+    const action = mathChallengeBandit.selectAction(getContext());
+    startNextRound(action);
+  };
+
+  const handleSaveAndExit = async () => {
+    const levelToSave = succeededLevel && savedLevel < 25 ? savedLevel + 1 : savedLevel;
+    await saveLevel(levelToSave, { incrementSessions: true });
+    onComplete(score);
   };
 
   const endGame = () => {
@@ -257,7 +278,9 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
     setBanditStats(mathChallengeBandit.getStats());
   };
 
-  const restartGame = () => {
+  const restartGame = async () => {
+    await saveLevel(1);
+    mathChallengeBandit.setLevel(1);
     setScore(0);
     setLevelsCompleted(0);
     setGameComplete(false);
