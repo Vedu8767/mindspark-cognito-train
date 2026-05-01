@@ -1,30 +1,77 @@
-import { Brain, TrendingUp, TrendingDown, Users, Download } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Brain, TrendingUp, TrendingDown, Users, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Button } from '@/components/ui/button';
-import { mockPatients, generateCohortTrend } from '@/lib/mockDoctorData';
+import {
+  getDoctorProfileId, fetchPatients, fetchCohortTrend,
+  type PatientWithStats,
+} from '@/lib/doctorDataService';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from 'recharts';
 
 const DoctorReports = () => {
+  const [patients, setPatients] = useState<PatientWithStats[]>([]);
+  const [cohortTrend, setCohortTrend] = useState<{ week: string; avgScore: number; activePlayers: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const docId = await getDoctorProfileId();
+      if (docId) {
+        const [p, trend] = await Promise.all([
+          fetchPatients(docId),
+          fetchCohortTrend(docId),
+        ]);
+        setPatients(p);
+        setCohortTrend(trend);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (patients.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Reports & Analytics</h1>
+          <p className="text-muted-foreground mt-1">Aggregate performance across all patients</p>
+        </div>
+        <Card className="border-border">
+          <CardContent className="p-10 text-center">
+            <Users className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+            <h3 className="text-lg font-semibold text-foreground">No patients enrolled yet</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Add patients from the <span className="font-medium text-foreground">Patients</span> tab to see cohort analytics here.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const total = patients.length;
   const avgScores = {
-    memory: Math.round(mockPatients.reduce((s, p) => s + p.domainScores.memory, 0) / mockPatients.length),
-    attention: Math.round(mockPatients.reduce((s, p) => s + p.domainScores.attention, 0) / mockPatients.length),
-    executive: Math.round(mockPatients.reduce((s, p) => s + p.domainScores.executive, 0) / mockPatients.length),
-    processing: Math.round(mockPatients.reduce((s, p) => s + p.domainScores.processing, 0) / mockPatients.length),
+    memory: Math.round(patients.reduce((s, p) => s + p.domainScores.memory, 0) / total),
+    attention: Math.round(patients.reduce((s, p) => s + p.domainScores.attention, 0) / total),
+    executive: Math.round(patients.reduce((s, p) => s + p.domainScores.executive, 0) / total),
+    processing: Math.round(patients.reduce((s, p) => s + p.domainScores.processing, 0) / total),
   };
+  const overallAvg = Math.round(patients.reduce((s, p) => s + p.overallScore, 0) / total);
+  const improvingCount = patients.filter(p => p.recentTrend === 'improving').length;
+  const decliningCount = patients.filter(p => p.recentTrend === 'declining').length;
 
-  const overallAvg = Math.round(mockPatients.reduce((s, p) => s + p.overallScore, 0) / mockPatients.length);
-  const improvingCount = mockPatients.filter(p => p.recentTrend === 'improving').length;
-  const decliningCount = mockPatients.filter(p => p.recentTrend === 'declining').length;
-
-  const cohortTrend = generateCohortTrend();
-
-  const patientBarData = mockPatients.map(p => ({
-    name: p.name.split(' ')[1] || p.name,
+  const patientBarData = patients.map(p => ({
+    name: p.name.split(' ').slice(-1)[0] || p.name,
     memory: p.domainScores.memory,
     attention: p.domainScores.attention,
     executive: p.domainScores.executive,
@@ -40,9 +87,10 @@ const DoctorReports = () => {
   ];
 
   const conditionDist = [
-    { name: 'Mild', value: mockPatients.filter(p => p.condition === 'mild').length },
-    { name: 'Moderate', value: mockPatients.filter(p => p.condition === 'moderate').length },
-    { name: 'Severe', value: mockPatients.filter(p => p.condition === 'severe').length },
+    { name: 'Mild', value: patients.filter(p => p.condition === 'mild').length },
+    { name: 'Moderate', value: patients.filter(p => p.condition === 'moderate').length },
+    { name: 'Severe', value: patients.filter(p => p.condition === 'severe').length },
+    { name: 'Unspecified', value: patients.filter(p => !p.condition).length },
   ];
 
   return (
@@ -60,7 +108,7 @@ const DoctorReports = () => {
           { label: 'Cohort Avg', value: `${overallAvg}%`, icon: Brain, gradient: 'from-primary to-primary-dark' },
           { label: 'Improving', value: improvingCount, icon: TrendingUp, gradient: 'from-[hsl(var(--success))] to-[hsl(var(--success-light))]' },
           { label: 'Declining', value: decliningCount, icon: TrendingDown, gradient: 'from-[hsl(var(--destructive))] to-[hsl(0,65%,50%)]' },
-          { label: 'Total Patients', value: mockPatients.length, icon: Users, gradient: 'from-[hsl(var(--secondary))] to-[hsl(var(--secondary-light))]' },
+          { label: 'Total Patients', value: total, icon: Users, gradient: 'from-[hsl(var(--secondary))] to-[hsl(var(--secondary-light))]' },
         ].map(s => (
           <Card key={s.label} className="border-border">
             <CardContent className="p-5">
@@ -175,11 +223,11 @@ const DoctorReports = () => {
                 </tr>
               </thead>
               <tbody>
-                {mockPatients.map(p => (
+                {patients.map(p => (
                   <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="py-3 pr-4 font-medium text-foreground">{p.name}</td>
                     <td className="py-3 px-3 text-foreground">{p.overallScore}%</td>
-                    <td className="py-3 px-3 text-foreground">{p.cognitiveAge}</td>
+                    <td className="py-3 px-3 text-foreground">{p.cognitiveAge ?? '—'}</td>
                     <td className="py-3 px-3 text-foreground">{p.domainScores.memory}%</td>
                     <td className="py-3 px-3 text-foreground">{p.domainScores.attention}%</td>
                     <td className="py-3 px-3 text-foreground">{p.domainScores.executive}%</td>
