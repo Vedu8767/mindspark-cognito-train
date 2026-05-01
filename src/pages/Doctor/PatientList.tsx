@@ -1,12 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, TrendingUp, TrendingDown, Minus, Brain, Loader2 } from 'lucide-react';
+import { Search, Filter, TrendingUp, TrendingDown, Minus, Brain, Loader2, UserPlus } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
 import { useDoctorAuth } from '@/context/DoctorAuthContext';
-import { fetchPatients, getDoctorProfileId, type PatientWithStats } from '@/lib/doctorDataService';
+import {
+  fetchPatients, getDoctorProfileId, assignPatientByEmail,
+  type PatientWithStats,
+} from '@/lib/doctorDataService';
 
 interface Props {
   onViewPatient: (id: string) => void;
@@ -27,17 +35,52 @@ const PatientList = ({ onViewPatient }: Props) => {
   const [search, setSearch] = useState('');
   const [conditionFilter, setConditionFilter] = useState('all');
   const [riskFilter, setRiskFilter] = useState('all');
+  const [docId, setDocId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newCondition, setNewCondition] = useState<string>('');
+  const [newRisk, setNewRisk] = useState<string>('');
+  const [newNotes, setNewNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const refresh = async (id: string | null) => {
+    if (!id) return;
+    const data = await fetchPatients(id);
+    setPatients(data);
+  };
 
   useEffect(() => {
     (async () => {
-      const docId = await getDoctorProfileId();
-      if (docId) {
-        const data = await fetchPatients(docId);
-        setPatients(data);
-      }
+      const id = await getDoctorProfileId();
+      setDocId(id);
+      await refresh(id);
       setLoading(false);
     })();
   }, []);
+
+  const handleAddPatient = async () => {
+    if (!docId) return;
+    if (!newEmail.trim()) {
+      toast({ title: 'Email required', description: 'Enter the patient account email.', variant: 'destructive' });
+      return;
+    }
+    setSubmitting(true);
+    const { error } = await assignPatientByEmail(docId, newEmail, {
+      condition: newCondition || null,
+      riskLevel: newRisk || null,
+      notes: newNotes || null,
+    });
+    setSubmitting(false);
+    if (error) {
+      toast({ title: 'Could not add patient', description: error, variant: 'destructive' });
+      return;
+    }
+    toast({ title: 'Patient added', description: `${newEmail} is now on your caseload.` });
+    setDialogOpen(false);
+    setNewEmail(''); setNewCondition(''); setNewRisk(''); setNewNotes('');
+    await refresh(docId);
+  };
 
   const filtered = patients.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || (p.email || '').toLowerCase().includes(search.toLowerCase());
@@ -56,9 +99,15 @@ const PatientList = ({ onViewPatient }: Props) => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Patients</h1>
-        <p className="text-muted-foreground mt-1">{patients.length} patients enrolled</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Patients</h1>
+          <p className="text-muted-foreground mt-1">{patients.length} patients enrolled</p>
+        </div>
+        <Button onClick={() => setDialogOpen(true)} disabled={!docId}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Add Patient
+        </Button>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -145,6 +194,67 @@ const PatientList = ({ onViewPatient }: Props) => {
           </div>
         )}
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Patient to Caseload</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="patient-email">Patient account email</Label>
+              <Input
+                id="patient-email"
+                type="email"
+                placeholder="patient@example.com"
+                value={newEmail}
+                onChange={e => setNewEmail(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">The patient must have already signed up.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Condition</Label>
+                <Select value={newCondition} onValueChange={setNewCondition}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="mild">Mild</SelectItem>
+                    <SelectItem value="moderate">Moderate</SelectItem>
+                    <SelectItem value="severe">Severe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Risk level</Label>
+                <Select value={newRisk} onValueChange={setNewRisk}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="patient-notes">Notes (optional)</Label>
+              <Textarea
+                id="patient-notes"
+                value={newNotes}
+                onChange={e => setNewNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDialogOpen(false)} disabled={submitting}>Cancel</Button>
+            <Button onClick={handleAddPatient} disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
+              Add Patient
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
