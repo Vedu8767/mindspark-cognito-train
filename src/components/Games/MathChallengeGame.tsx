@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { RotateCcw, Home, Trophy, Calculator, Timer, Sparkles } from 'lucide-react';
+import { RotateCcw, Home, Trophy, Calculator, Timer, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { mathChallengeBandit, type MathContext, type MathAction } from '@/lib/bandit/mathChallengeBandit';
 import { useGameProgress } from '@/hooks/useGameProgress';
@@ -338,59 +338,23 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
 
   if (levelComplete && currentAction) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary flex items-center justify-center p-4">
-        <div className="glass-card-strong p-8 max-w-md w-full text-center space-y-6 animate-bounce-in">
-          <div className="p-4 bg-gradient-to-br from-primary to-primary-dark rounded-full w-20 h-20 mx-auto flex items-center justify-center">
-            <Calculator className="h-10 w-10 text-white" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Level {currentAction.level} Complete!</h2>
-            <p className="text-muted-foreground">
-              Great mathematical thinking!
-            </p>
-            
-            {/* AI Insight */}
-            <div className={`bg-gradient-to-r ${getDifficultyColor()} p-4 rounded-lg border mt-4`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Sparkles className="h-4 w-4 text-purple-400" />
-                <span className="text-sm font-medium text-foreground">AI Analysis</span>
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">{performanceInsight}</p>
-              <div className="flex items-center gap-2 justify-center">
-                {getDifficultyIcon()}
-                <span className="text-sm text-muted-foreground">
-                  Next level will be <span className="font-medium text-foreground">{nextLevelPrediction}</span>
-                </span>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              <div className="bg-success/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Correct</p>
-                <p className="text-xl font-bold text-success">{correct}/{currentAction.problemCount}</p>
-              </div>
-              <div className="bg-accent/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Streak</p>
-                <p className="text-xl font-bold text-accent">{maxStreak}</p>
-              </div>
-              <div className="bg-primary/10 p-3 rounded-lg">
-                <p className="text-sm text-muted-foreground">Score</p>
-                <p className="text-xl font-bold text-primary">{score}</p>
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex space-x-4">
-            <Button onClick={nextLevel} className="flex-1 btn-primary">
-              {levelsCompleted >= 4 ? 'Complete Game' : 'Next Level'}
-            </Button>
-            <Button onClick={onExit} variant="outline">
-              <Home className="h-4 w-4 mr-2" />
-              Exit
-            </Button>
-          </div>
-        </div>
-      </div>
+      <LevelCompleteScreen
+        level={savedLevel}
+        maxLevel={25}
+        score={score}
+        succeeded={succeededLevel}
+        prediction={nextLevelPrediction as DifficultyPrediction}
+        insight={performanceInsight}
+        stats={[
+          { label: 'Correct', value: `${correct}/${currentAction.problemCount}`, tone: 'success' },
+          { label: 'Streak', value: maxStreak, tone: 'accent' },
+          { label: 'Score', value: score, tone: 'primary' },
+        ]}
+        canAdvance={succeededLevel && savedLevel < 25}
+        onNextLevel={handleNextLevel}
+        onReplay={handleReplay}
+        onSaveAndExit={handleSaveAndExit}
+      />
     );
   }
 
