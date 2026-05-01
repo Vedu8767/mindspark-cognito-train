@@ -256,6 +256,11 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
   const handleReplay = async () => {
     await saveLevel(currentLevel, { incrementSessions: true });
     setLevelComplete(false);
+    const action = getAction();
+    setCurrentAction(action);
+    generateTrials(action);
+    setLevelStartTime(Date.now());
+    setTrialStartTime(Date.now());
   };
 
   const handleSaveAndExit = async () => {

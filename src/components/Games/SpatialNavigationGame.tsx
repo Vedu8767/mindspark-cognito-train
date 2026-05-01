@@ -93,6 +93,20 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
     }
   }, [currentLevel, gameStarted]);
 
+  // Keyboard arrow-key navigation.
+  useEffect(() => {
+    if (!gameStarted || gamePhase !== 'navigate') return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp') { e.preventDefault(); movePlayer('up'); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); movePlayer('down'); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); movePlayer('left'); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); movePlayer('right'); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameStarted, gamePhase, playerPosition, currentAction, trials, currentTrial]);
+
   useEffect(() => {
     if (gameStarted && timeLeft > 0 && !gameComplete && !levelComplete) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
@@ -296,6 +310,10 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
   const handleReplay = async () => {
     await saveLevel(currentLevel, { incrementSessions: true });
     setLevelComplete(false);
+    const action = getAction();
+    setCurrentAction(action);
+    generateTrials(action);
+    setLevelStartTime(Date.now());
   };
 
   const handleSaveAndExit = async () => {
