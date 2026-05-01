@@ -1,5 +1,4 @@
 import { 
-import { scopedKey, registerBandit } from './storage';
   UserContext, 
   GameAction, 
   ArmStatistics, 
@@ -10,6 +9,7 @@ import { scopedKey, registerBandit } from './storage';
 } from './types';
 import { generateActionSpace, getActionKey, getActionsForLevel } from './actionSpace';
 import { getContextActionFeatures, getFeatureDimension } from './featureExtractor';
+import { scopedKey, registerBandit } from './storage';
 
 const STORAGE_KEY = 'epsilonGreedyBandit';
 const FEATURE_DIM = getFeatureDimension();
