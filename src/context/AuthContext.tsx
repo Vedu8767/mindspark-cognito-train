@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { User as SupabaseUser, Session } from '@supabase/supabase-js';
+import { bindBanditsToUser, unbindBandits } from '@/lib/bandit';
 
 interface UserProfile {
   id: string;
@@ -61,9 +62,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(currentSession?.user ?? null);
         
         if (currentSession?.user) {
+          // Bind bandit storage to this user so AI Lab data is per-user.
+          bindBanditsToUser(currentSession.user.id);
           // Defer profile fetch to avoid deadlock
           setTimeout(() => fetchProfile(currentSession.user.id), 0);
         } else {
+          unbindBandits();
           setProfile(null);
         }
         setIsLoading(false);
@@ -75,6 +79,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(existingSession);
       setUser(existingSession?.user ?? null);
       if (existingSession?.user) {
+        bindBanditsToUser(existingSession.user.id);
         fetchProfile(existingSession.user.id);
       }
       setIsLoading(false);
@@ -102,6 +107,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const logout = async () => {
     await supabase.auth.signOut();
+    unbindBandits();
     setUser(null);
     setProfile(null);
     setSession(null);

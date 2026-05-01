@@ -298,3 +298,131 @@ export async function fetchUnreadAlertCount(doctorProfileId: string): Promise<nu
     .eq('read', false);
   return count ?? 0;
 }
+
+/**
+ * Enroll a patient into the current doctor's caseload by their account email.
+ * Returns { error: null, patientId } on success, or { error: <message> } on failure.
+ */
+export async function assignPatientByEmail(
+  doctorProfileId: string,
+  email: string,
+  opts: { condition?: string | null; riskLevel?: string | null; notes?: string | null } = {}
+): Promise<{ error: string | null; patientId?: string }> {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) return { error: 'Email is required' };
+
+  // Look up the patient profile id via security-definer helper.
+  const { data: patientProfileId, error: rpcErr } = await supabase
+    .rpc('find_patient_profile_by_email', { _email: trimmed });
+
+  if (rpcErr) return { error: rpcErr.message };
+  if (!patientProfileId) {
+    return { error: 'No patient account found with that email. Ask them to sign up first.' };
+  }
+
+  // Avoid duplicates — reactivate if assignment already exists.
+  const { data: existing } = await supabase
+    .from('patient_doctor_assignments')
+    .select('id, status')
+    .eq('doctor_id', doctorProfileId)
+    .eq('patient_id', patientProfileId)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === 'active') {
+      return { error: 'This patient is already on your caseload.' };
+    }
+    const { error: upErr } = await supabase
+      .from('patient_doctor_assignments')
+      .update({
+        status: 'active',
+        condition: opts.condition ?? null,
+        risk_level: opts.riskLevel ?? null,
+        notes: opts.notes ?? null,
+      })
+      .eq('id', existing.id);
+    if (upErr) return { error: upErr.message };
+    return { error: null, patientId: patientProfileId as string };
+  }
+
+  const { error: insErr } = await supabase
+    .from('patient_doctor_assignments')
+    .insert({
+      doctor_id: doctorProfileId,
+      patient_id: patientProfileId as string,
+      status: 'active',
+      condition: opts.condition ?? null,
+      risk_level: opts.riskLevel ?? null,
+      notes: opts.notes ?? null,
+    });
+
+  if (insErr) return { error: insErr.message };
+  return { error: null, patientId: patientProfileId as string };
+}
+
+/** Remove a patient from the doctor's caseload (sets assignment to inactive). */
+export async function unassignPatient(doctorProfileId: string, patientProfileId: string) {
+  const { error } = await supabase
+    .from('patient_doctor_assignments')
+    .update({ status: 'inactive' })
+    .eq('doctor_id', doctorProfileId)
+    .eq('patient_id', patientProfileId);
+  return { error: error?.message ?? null };
+}
+
+/** Build a real 8-week cohort trend from all assigned patients' game sessions. */
+export async function fetchCohortTrend(
+  doctorProfileId: string
+): Promise<{ week: string; avgScore: number; activePlayers: number }[]> {
+  // Get assigned patient user_ids
+  const { data: assignments } = await supabase
+    .from('patient_doctor_assignments')
+    .select('patient_id')
+    .eq('doctor_id', doctorProfileId)
+    .eq('status', 'active');
+
+  if (!assignments || assignments.length === 0) return [];
+
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, user_id')
+    .in('id', assignments.map(a => a.patient_id));
+
+  if (!profiles || profiles.length === 0) return [];
+  const userIds = profiles.map(p => p.user_id);
+
+  const eightWeeksAgo = new Date();
+  eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 7 * 8);
+
+  const { data: sessions } = await supabase
+    .from('game_sessions')
+    .select('score, user_id, created_at')
+    .in('user_id', userIds)
+    .gte('created_at', eightWeeksAgo.toISOString())
+    .limit(1000);
+
+  const buckets: { weekStart: Date; scores: number[]; users: Set<string> }[] = [];
+  for (let i = 7; i >= 0; i--) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - i * 7);
+    buckets.push({ weekStart: start, scores: [], users: new Set() });
+  }
+
+  for (const s of sessions || []) {
+    const ts = new Date(s.created_at).getTime();
+    for (let i = buckets.length - 1; i >= 0; i--) {
+      if (ts >= buckets[i].weekStart.getTime()) {
+        buckets[i].scores.push(s.score);
+        buckets[i].users.add(s.user_id);
+        break;
+      }
+    }
+  }
+
+  return buckets.map((b, idx) => ({
+    week: idx === buckets.length - 1 ? 'WNow' : `W-${buckets.length - 1 - idx}`,
+    avgScore: b.scores.length > 0 ? Math.round(b.scores.reduce((a, c) => a + c, 0) / b.scores.length) : 0,
+    activePlayers: b.users.size,
+  }));
+}

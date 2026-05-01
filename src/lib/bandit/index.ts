@@ -19,3 +19,5 @@ export { audioMemoryBandit, type AudioContext as AudioBanditContext, type AudioA
 
 // Re-export main types with aliases for backward compatibility
 export type { UserContext as Context, GameAction as GameConfig } from './types';
+
+export { bindBanditsToUser, unbindBandits, scopedKey } from './storage';

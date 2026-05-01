@@ -475,6 +475,10 @@ export type Database = {
     }
     Functions: {
       current_doctor_id: { Args: never; Returns: string }
+      find_patient_profile_by_email: {
+        Args: { _email: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
