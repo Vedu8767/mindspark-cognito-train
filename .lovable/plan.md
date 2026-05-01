@@ -1,135 +1,67 @@
-## Plan
+## Problem
 
-### 1. Repair the backend progress path first
-Create a database migration to remove the row-level security recursion that is breaking `game_progress` reads/writes.
+Three concrete sources of "fake data" right now:
 
-- Add security-definer helper functions for doctor access checks instead of joining `profiles` inside policies.
-- Rewrite the doctor-view policies on:
-  - `profiles`
-  - `game_progress`
-  - `game_sessions`
-- Keep patient self-access policies unchanged.
+1. **Doctor Reports page** (`DoctorReports.tsx`) imports `mockPatients` and `generateCohortTrend` from `mockDoctorData.ts`. Every chart, KPI, and table on that page is hardcoded mock data — none of it reflects the doctor's actual patients.
 
-Result: `useGameProgress()` will load the correct saved level for the logged-in user instead of silently falling back to level 1.
+2. **Doctor sees no real patients anywhere** — `PatientList`, `DoctorOverview`, and `TrainingPrescriptions` already query real Supabase data via `fetchPatients(doctorProfileId)`, but that function only returns rows from `patient_doctor_assignments`. **There is no UI for a doctor to add/enroll a patient**, so the table is always empty, which makes the dashboard look broken or "fake".
 
-### 2. Standardize level completion flow in the remaining broken games
-Refactor the affected games so they all use the same progression contract:
+3. **AI Insights Dashboard ("AI Lab")** reads from bandit singletons that persist to a single global `localStorage` key (`epsilonGreedyBandit`, `attentionBandit`, …). This means:
+   - Data is shared across every account on the same browser (User A's progress shows up for User B).
+   - On a fresh login the values are inherited from whoever last used the device → looks like fake/random data.
+   - Bandit state is not tied to the authenticated `user.id`.
 
-- Finish level -> show `LevelCompleteScreen`
-- Buttons:
-  - Next Level
-  - Replay
-  - Save & Exit
-- No auto-advance
-- No hidden fallback “complete” screen that bypasses the level-complete UI
-- Next/Replay must fully reinitialize that level’s state
+## Fix
 
-Affected games:
-- Reaction Speed
-- Visual Processing
-- Executive Function
-- Word Memory
-- Math Challenge
-- Spatial Navigation
-- Processing Speed
-- Audio Memory
-- Tower of Hanoi
+### 1. Doctor Reports — use real cohort data
+- Remove the `mockPatients` / `generateCohortTrend` imports.
+- Fetch real patients via `fetchPatients(doctorProfileId)` (already used by other pages).
+- Compute cohort KPIs (avg score, improving/declining counts, condition distribution, domain averages, patient bar chart) from the real array.
+- For the cohort trend line chart, build it from the real `game_sessions` of all assigned patients (group by week, average score). Add a new helper `fetchCohortTrend(doctorProfileId)` in `doctorDataService.ts`.
+- Empty state: when the doctor has 0 patients, show a friendly "No patients enrolled yet — add one from the Patients tab" card instead of broken charts.
 
-### 3. Fix each reported gameplay bug
+### 2. Add Patient enrollment flow (the missing piece)
+The reason the doctor's dashboard looks empty is that nothing creates rows in `patient_doctor_assignments`. We need a real way to do this.
 
-#### Reaction Speed
-- Remove the separate `gameState === 'complete'` end screen that currently overrides `LevelCompleteScreen`.
-- Keep the game on the level-complete screen until the user chooses what to do.
-- Ensure Next Level reinitializes trials and does not get stuck.
+- Add an **"Add Patient" button** to the top of `PatientList.tsx` that opens a dialog.
+- The dialog accepts: patient email, condition (mild / moderate / severe), risk level (low / medium / high), notes.
+- On submit, a new helper `assignPatientByEmail(doctorProfileId, email, ...)` in `doctorDataService.ts`:
+  1. Looks up the patient in `profiles` by email.
+  2. If found, inserts a row into `patient_doctor_assignments` (status=`active`) and returns success.
+  3. If not found, returns a clear error: "No patient account found with that email. Ask them to sign up first."
+- After success, refresh the patient list. The patient now appears across Overview, Patients, Reports, and Training Plans.
+- Also surface "Remove from caseload" on the patient card / profile (sets `status='inactive'`), so doctors can unenroll.
 
-#### Visual Processing
-- Refactor level initialization so Start Level 1 does not immediately fall into completion.
-- Reset `currentTrial`, `timeLeft`, `showTarget`, `responseTimes`, and action state on Next/Replay.
-- Ensure Next Level starts a fresh round instead of staying on a dead state.
+Note: this is the simplest reliable flow given the existing schema and RLS. We are not adding cross-table email lookups in RLS; the doctor only ever inserts into `patient_doctor_assignments` (already allowed by their existing INSERT policy).
 
-#### Executive Function
-- End the level immediately when the last task is answered.
-- Remove the requirement to wait for the timer after tasks are done.
-- Fix Save & Exit to use the shared completion flow.
+### 3. AI Lab — make bandit data per-user (and remove the cross-user bleed)
+This is the root cause of the "fake-looking" AI numbers.
 
-#### Word Memory
-- Replace the old custom results screen with `LevelCompleteScreen`.
-- End immediately once the recall phase is finished instead of forcing the user to sit through leftover timer time.
-- Add Save & Exit and Replay support.
-- Guard Enter submission so it only submits valid input and doesn’t create accidental transitions.
+- Change every bandit's `STORAGE_KEY` from a static string to a function that namespaces by the current Supabase user id, e.g. `bandit:${userId}:epsilonGreedy`. A small shared helper `getUserScopedKey(name)` in `src/lib/bandit/storage.ts` will read `supabase.auth.getUser()` once at app startup and cache the id.
+- On login: rehydrate every bandit from its user-scoped key. On logout: reset all bandit instances in memory.
+- On `AppLayout` mount, call a new `bandits.bindToUser(userId)` that loads the per-user state for all 12 bandits. This ensures User A logging in gets only their own data.
+- AI Insights Dashboard already reads `getStats()` from those instances, so once per-user binding is in place the charts automatically show only the current user's real adaptation history. Empty state ("No data yet — play games!") already exists and will naturally appear for new users.
 
-#### Math Challenge
-- Replace the old custom level-end UI with `LevelCompleteScreen`.
-- Add Save & Exit and Replay support.
-- Keep the input/answer guards so double-submits cannot skip levels.
+### 4. Cleanup
+- Keep `AVAILABLE_GAMES` from `mockDoctorData.ts` (it's a static game catalog, not fake metrics) — but move it into `src/lib/gameCatalog.ts` and delete the rest of `mockDoctorData.ts` so no future page can accidentally import mock patients.
+- Update the one remaining import in `TrainingPrescriptions.tsx`.
 
-#### Spatial Navigation
-- Add keyboard arrow-key movement in addition to the on-screen buttons.
-- Make sure movement only works during the navigation phase.
-- Keep level completion tied to actual target reach, not timer expiration alone.
+## Files to change
 
-#### Processing Speed
-- Fix Save & Exit to persist level and then return cleanly.
-- Ensure Next/Replay reset inputs, current trial, and timer correctly.
+- `src/pages/Doctor/DoctorReports.tsx` — replace mock with real fetch + empty state
+- `src/pages/Doctor/PatientList.tsx` — add "Add Patient" dialog and remove action
+- `src/lib/doctorDataService.ts` — add `assignPatientByEmail`, `unassignPatient`, `fetchCohortTrend`
+- `src/lib/bandit/storage.ts` (new) — user-scoped storage helper + `bindToUser` / `resetAll`
+- `src/lib/bandit/*.ts` (12 files) — switch each `STORAGE_KEY` constant to the helper
+- `src/components/Layout/AppLayout.tsx` — call `bandits.bindToUser(user.id)` on login
+- `src/context/AuthContext.tsx` — call `bandits.resetAll()` on logout
+- `src/lib/gameCatalog.ts` (new) — extract `AVAILABLE_GAMES`
+- `src/pages/Doctor/TrainingPrescriptions.tsx` — update import
+- `src/lib/mockDoctorData.ts` — delete
 
-#### Audio Memory
-- Make the cues easier to understand by showing visible labels/colors for each tone during playback and repeat.
-- Keep replay available when the current difficulty allows it.
-- Fix Save & Exit and Next Level resets so sequence/game phase do not get stuck.
+## Outcome
 
-#### Tower of Hanoi
-- Fix Next Level and Save & Exit so they both persist progress and fully rebuild the towers for the next round.
-- Keep `LevelCompleteScreen` as the only post-level UI.
-
-### 4. Remove fake stats and mixed user data
-Replace the remaining hardcoded/shared data sources that still make the app look fake or cross-user.
-
-- `AppLayout.tsx`
-  - Stop recording every finished game as `level: 1`, `duration: 60`, `difficulty: 'Adaptive'`.
-  - Pass real session payload from each game: score, level, duration, difficulty, completion state, optional metrics.
-- `Games.tsx`
-  - Replace hardcoded `lastScore`, `improvement`, and difficulty labels with per-user data from the backend.
-  - Show each signed-in user only their own latest session/progress.
-- Local fallback keys
-  - Namespace fallback/local storage by user id where fallback is still needed so one user never sees another user’s progress on the same device.
-
-### 5. Make progression and score reporting consistent
-Unify what each game reports when a level ends.
-
-Each game should produce real values for:
-- current level
-- completed status
-- duration
-- score
-- difficulty/config used
-- optional accuracy / moves / reaction time
-
-This will keep the dashboard, history, achievements, and doctor-facing data correct per user.
-
-## Technical details
-
-### Files to update
-- `supabase/migrations/...sql`
-- `src/lib/gameProgressService.ts`
-- `src/components/Layout/AppLayout.tsx`
-- `src/pages/Games.tsx`
-- `src/lib/achievements.ts` (or shared history/persistence helpers)
-- `src/components/Games/ReactionSpeedGame.tsx`
-- `src/components/Games/VisualProcessingGame.tsx`
-- `src/components/Games/ExecutiveFunctionGame.tsx`
-- `src/components/Games/WordMemoryGame.tsx`
-- `src/components/Games/MathChallengeGame.tsx`
-- `src/components/Games/SpatialNavigationGame.tsx`
-- `src/components/Games/ProcessingSpeedGame.tsx`
-- `src/components/Games/AudioMemoryGame.tsx`
-- `src/components/Games/TowerOfHanoiGame.tsx`
-
-### Acceptance criteria
-- Progress loads from the backend without recursion errors.
-- Re-entering a game resumes that user’s saved level.
-- One user never sees another user’s scores/history/progress.
-- Reaction Speed and Visual Processing no longer end immediately on start.
-- Executive Function and Word Memory end as soon as tasks are actually finished.
-- Math, Word, Processing, Audio, and Tower all support working Next / Replay / Save & Exit.
-- Spatial keyboard arrows work.
-- Game cards and session history show real per-user values instead of hardcoded placeholders.
+- Doctor logs in → sees an empty dashboard with a clear "Add Patient" CTA (no fake numbers).
+- Doctor adds a real patient by email → that patient and their actual game sessions appear across Overview, Patients, Reports, and can be assigned a Training Plan.
+- AI Lab → shows ONLY the current logged-in user's bandit history. New users see "No data yet — play games!". Different users on the same browser no longer see each other's data.
+- Nothing else breaks: existing patient-side flows (games, dashboard, analytics) continue to work because they already query Supabase by `auth.uid()`.
