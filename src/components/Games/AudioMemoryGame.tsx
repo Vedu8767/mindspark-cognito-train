@@ -253,6 +253,7 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
   const handleReplay = async () => {
     await saveLevel(currentLevel, { incrementSessions: true });
     setLevelComplete(false);
+    initializeLevel();
   };
 
   const handleSaveAndExit = async () => {
