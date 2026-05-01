@@ -1,3 +1,4 @@
+import { scopedKey, registerBandit } from './storage';
 // Executive Function Game Epsilon-Greedy Contextual Bandit
 
 export interface ExecutiveContext {
@@ -316,7 +317,7 @@ export class ExecutiveFunctionBandit {
     };
   }
 
-  private saveState(): void {
+  public saveState(): void {
     try {
       const state = {
         arms: Array.from(this.arms.entries()),
@@ -324,15 +325,15 @@ export class ExecutiveFunctionBandit {
         totalPulls: this.totalPulls,
         userProfile: this.userProfile,
       };
-      localStorage.setItem(this.storageKey, JSON.stringify(state));
+      localStorage.setItem(scopedKey(this.storageKey), JSON.stringify(state));
     } catch (e) {
       console.warn('Failed to save executive function bandit state');
     }
   }
 
-  private loadState(): void {
+  public loadState(): void {
     try {
-      const saved = localStorage.getItem(this.storageKey);
+      const saved = localStorage.getItem(scopedKey(this.storageKey));
       if (saved) {
         const state = JSON.parse(saved);
         this.arms = new Map(state.arms);
@@ -358,8 +359,12 @@ export class ExecutiveFunctionBandit {
       preferredTaskMix: 2,
     };
     this.initializeArms();
-    localStorage.removeItem(this.storageKey);
+    localStorage.removeItem(scopedKey(this.storageKey));
   }
 }
 
 export const executiveFunctionBandit = new ExecutiveFunctionBandit();
+registerBandit({
+  reload: () => (executiveFunctionBandit as any).loadState?.(),
+  reset: () => (executiveFunctionBandit as any).reset?.(),
+});

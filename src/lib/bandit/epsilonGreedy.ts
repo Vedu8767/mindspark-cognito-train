@@ -1,4 +1,5 @@
 import { 
+import { scopedKey, registerBandit } from './storage';
   UserContext, 
   GameAction, 
   ArmStatistics, 
@@ -347,7 +348,7 @@ export class EpsilonGreedyBandit {
   }
   
   // Persistence
-  private saveState(): void {
+  public saveState(): void {
     const state: BanditState = {
       arms: this.arms,
       epsilon: this.epsilon,
@@ -356,7 +357,7 @@ export class EpsilonGreedyBandit {
       userProfile: this.userProfile
     };
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify({
       arms: Array.from(state.arms.entries()),
       epsilon: state.epsilon,
       totalPulls: state.totalPulls,
@@ -365,9 +366,9 @@ export class EpsilonGreedyBandit {
     }));
   }
   
-  private loadState(): void {
+  public loadState(): void {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(scopedKey(STORAGE_KEY));
       if (stored) {
         const data = JSON.parse(stored);
         this.arms = new Map(data.arms || []);
@@ -391,10 +392,14 @@ export class EpsilonGreedyBandit {
     this.history = [];
     this.userProfile = this.initUserProfile();
     this.initializeArms();
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(scopedKey(STORAGE_KEY));
     console.log('[Bandit] Reset complete');
   }
 }
 
 // Singleton instance
 export const memoryGameBandit = new EpsilonGreedyBandit();
+registerBandit({
+  reload: () => (memoryGameBandit as any).loadState?.(),
+  reset: () => (memoryGameBandit as any).reset?.(),
+});

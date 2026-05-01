@@ -1,3 +1,4 @@
+import { scopedKey, registerBandit } from './storage';
 // Word Memory Game Epsilon-Greedy Contextual Bandit
 // Adapts word count, study time, recall time, and word complexity based on user performance
 
@@ -304,7 +305,7 @@ export class WordMemoryBandit {
     };
   }
 
-  private saveState(): void {
+  public saveState(): void {
     try {
       const state = {
         arms: Array.from(this.arms.entries()),
@@ -313,15 +314,15 @@ export class WordMemoryBandit {
         currentLevel: this.currentLevel,
         recentPerformance: this.recentPerformance
       };
-      localStorage.setItem('wordMemoryBandit', JSON.stringify(state));
+      localStorage.setItem(scopedKey('wordMemoryBandit'), JSON.stringify(state));
     } catch (e) {
       console.warn('Failed to save word memory bandit state:', e);
     }
   }
 
-  private loadState(): void {
+  public loadState(): void {
     try {
-      const saved = localStorage.getItem('wordMemoryBandit');
+      const saved = localStorage.getItem(scopedKey('wordMemoryBandit'));
       if (saved) {
         const state = JSON.parse(saved);
         this.arms = new Map(state.arms);
@@ -342,8 +343,12 @@ export class WordMemoryBandit {
     this.currentLevel = 1;
     this.recentPerformance = [];
     this.initializeArms();
-    localStorage.removeItem('wordMemoryBandit');
+    localStorage.removeItem(scopedKey('wordMemoryBandit'));
   }
 }
 
 export const wordMemoryBandit = new WordMemoryBandit();
+registerBandit({
+  reload: () => (wordMemoryBandit as any).loadState?.(),
+  reset: () => (wordMemoryBandit as any).reset?.(),
+});

@@ -1,6 +1,7 @@
 // Pattern Recognition Game - Epsilon-Greedy Contextual Bandit
 
 import { UserContext, GameAction, ArmStatistics, PerformanceMetrics, UserProfile } from './types';
+import { scopedKey, registerBandit } from './storage';
 
 // Pattern-specific context
 export interface PatternContext extends UserContext {
@@ -380,7 +381,7 @@ class PatternRecognitionBandit {
     };
   }
 
-  private saveState(): void {
+  public saveState(): void {
     const state = {
       arms: Array.from(this.arms.entries()),
       epsilon: this.epsilon,
@@ -388,12 +389,12 @@ class PatternRecognitionBandit {
       userProfile: this.userProfile,
       currentLevel: this.currentLevel
     };
-    localStorage.setItem(this.storageKey, JSON.stringify(state));
+    localStorage.setItem(scopedKey(this.storageKey), JSON.stringify(state));
   }
 
-  private loadState(): void {
+  public loadState(): void {
     try {
-      const saved = localStorage.getItem(this.storageKey);
+      const saved = localStorage.getItem(scopedKey(this.storageKey));
       if (saved) {
         const state = JSON.parse(saved);
         this.arms = new Map(state.arms);
@@ -408,7 +409,7 @@ class PatternRecognitionBandit {
   }
 
   reset(): void {
-    localStorage.removeItem(this.storageKey);
+    localStorage.removeItem(scopedKey(this.storageKey));
     this.arms.clear();
     this.epsilon = 0.3;
     this.totalPulls = 0;
@@ -426,3 +427,7 @@ class PatternRecognitionBandit {
 }
 
 export const patternRecognitionBandit = new PatternRecognitionBandit();
+registerBandit({
+  reload: () => (patternRecognitionBandit as any).loadState?.(),
+  reset: () => (patternRecognitionBandit as any).reset?.(),
+});

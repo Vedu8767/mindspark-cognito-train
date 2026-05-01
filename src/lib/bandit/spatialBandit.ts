@@ -1,5 +1,6 @@
 // Epsilon-Greedy Contextual Bandit for Spatial Navigation Game
 import { PerformanceMetrics, UserProfile } from './types';
+import { scopedKey, registerBandit } from './storage';
 
 export interface SpatialContext {
   currentLevel: number;
@@ -418,8 +419,8 @@ export class SpatialBandit {
     };
   }
   
-  private saveState(): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+  public saveState(): void {
+    localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify({
       arms: Array.from(this.arms.entries()),
       epsilon: this.epsilon,
       totalPulls: this.totalPulls,
@@ -428,9 +429,9 @@ export class SpatialBandit {
     }));
   }
   
-  private loadState(): void {
+  public loadState(): void {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(scopedKey(STORAGE_KEY));
       if (stored) {
         const data = JSON.parse(stored);
         this.arms = new Map(data.arms || []);
@@ -452,8 +453,12 @@ export class SpatialBandit {
     this.history = [];
     this.userProfile = this.initUserProfile();
     this.initializeArms();
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(scopedKey(STORAGE_KEY));
   }
 }
 
 export const spatialBandit = new SpatialBandit();
+registerBandit({
+  reload: () => (spatialBandit as any).loadState?.(),
+  reset: () => (spatialBandit as any).reset?.(),
+});
