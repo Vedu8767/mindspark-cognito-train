@@ -1,6 +1,6 @@
 // Epsilon-Greedy Contextual Bandit for Attention Focus Game
 import { PerformanceMetrics, UserProfile } from './types';
-import { scopedKey, registerBandit } from './storage';
+import { saveBanditState, loadBanditState, removeBanditState, registerBandit } from './storage';
 
 export interface AttentionContext {
   currentLevel: number;
@@ -416,20 +416,19 @@ export class AttentionBandit {
   }
   
   public saveState(): void {
-    localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify({
+    saveBanditState(STORAGE_KEY, {
       arms: Array.from(this.arms.entries()),
       epsilon: this.epsilon,
       totalPulls: this.totalPulls,
       history: this.history.slice(-100),
       userProfile: this.userProfile,
-    }));
+    });
   }
   
   public loadState(): void {
     try {
-      const stored = localStorage.getItem(scopedKey(STORAGE_KEY));
-      if (stored) {
-        const data = JSON.parse(stored);
+      const data = loadBanditState<any>(STORAGE_KEY);
+      if (data) {
         this.arms = new Map(data.arms || []);
         this.epsilon = data.epsilon || 0.3;
         this.totalPulls = data.totalPulls || 0;
@@ -449,7 +448,7 @@ export class AttentionBandit {
     this.history = [];
     this.userProfile = this.initUserProfile();
     this.initializeArms();
-    localStorage.removeItem(scopedKey(STORAGE_KEY));
+    removeBanditState(STORAGE_KEY);
   }
 }
 

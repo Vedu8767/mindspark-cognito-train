@@ -1,4 +1,4 @@
-import { scopedKey, registerBandit } from './storage';
+import { saveBanditState, loadBanditState, removeBanditState, registerBandit } from './storage';
 // Tower of Hanoi Epsilon-Greedy Contextual Bandit
 
 export interface HanoiContext {
@@ -373,7 +373,7 @@ class TowerOfHanoiBandit {
         userProfile: this.userProfile,
         recentRewards: this.recentRewards
       };
-      localStorage.setItem(scopedKey(this.storageKey), JSON.stringify(state));
+      saveBanditState(this.storageKey, state);
     } catch (e) {
       console.warn('Failed to save Hanoi bandit state:', e);
     }
@@ -381,9 +381,8 @@ class TowerOfHanoiBandit {
 
   public loadState(): void {
     try {
-      const saved = localStorage.getItem(scopedKey(this.storageKey));
-      if (saved) {
-        const state = JSON.parse(saved);
+      const state = loadBanditState<any>(this.storageKey);
+      if (state) {
         this.arms = new Map(state.arms);
         this.epsilon = state.epsilon || 0.3;
         this.totalPulls = state.totalPulls || 0;
@@ -410,7 +409,7 @@ class TowerOfHanoiBandit {
       skillLevel: 1
     };
     this.initializeArms();
-    localStorage.removeItem(scopedKey(this.storageKey));
+    removeBanditState(this.storageKey);
   }
 }
 

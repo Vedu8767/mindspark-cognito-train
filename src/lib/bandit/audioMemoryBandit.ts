@@ -1,4 +1,4 @@
-import { scopedKey, registerBandit } from './storage';
+import { saveBanditState, loadBanditState, removeBanditState, registerBandit } from './storage';
 // Audio Memory Epsilon-Greedy Contextual Bandit
 
 export interface AudioContext {
@@ -379,7 +379,7 @@ class AudioMemoryBandit {
         userProfile: this.userProfile,
         recentRewards: this.recentRewards
       };
-      localStorage.setItem(scopedKey(this.storageKey), JSON.stringify(state));
+      saveBanditState(this.storageKey, state);
     } catch (e) {
       console.warn('Failed to save Audio bandit state:', e);
     }
@@ -387,9 +387,8 @@ class AudioMemoryBandit {
 
   public loadState(): void {
     try {
-      const saved = localStorage.getItem(scopedKey(this.storageKey));
-      if (saved) {
-        const state = JSON.parse(saved);
+      const state = loadBanditState<any>(this.storageKey);
+      if (state) {
         this.arms = new Map(state.arms);
         this.epsilon = state.epsilon || 0.3;
         this.totalPulls = state.totalPulls || 0;
@@ -416,7 +415,7 @@ class AudioMemoryBandit {
       skillLevel: 1
     };
     this.initializeArms();
-    localStorage.removeItem(scopedKey(this.storageKey));
+    removeBanditState(this.storageKey);
   }
 }
 

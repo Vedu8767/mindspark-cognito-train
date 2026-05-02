@@ -9,7 +9,7 @@ import {
 } from './types';
 import { generateActionSpace, getActionKey, getActionsForLevel } from './actionSpace';
 import { getContextActionFeatures, getFeatureDimension } from './featureExtractor';
-import { scopedKey, registerBandit } from './storage';
+import { saveBanditState, loadBanditState, removeBanditState, registerBandit } from './storage';
 
 const STORAGE_KEY = 'epsilonGreedyBandit';
 const FEATURE_DIM = getFeatureDimension();
@@ -357,20 +357,19 @@ export class EpsilonGreedyBandit {
       userProfile: this.userProfile
     };
     
-    localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify({
+    saveBanditState(STORAGE_KEY, {
       arms: Array.from(state.arms.entries()),
       epsilon: state.epsilon,
       totalPulls: state.totalPulls,
       history: state.history,
       userProfile: state.userProfile
-    }));
+    });
   }
   
   public loadState(): void {
     try {
-      const stored = localStorage.getItem(scopedKey(STORAGE_KEY));
-      if (stored) {
-        const data = JSON.parse(stored);
+      const data = loadBanditState<any>(STORAGE_KEY);
+      if (data) {
         this.arms = new Map(data.arms || []);
         this.epsilon = data.epsilon || 0.3;
         this.totalPulls = data.totalPulls || 0;
@@ -392,7 +391,7 @@ export class EpsilonGreedyBandit {
     this.history = [];
     this.userProfile = this.initUserProfile();
     this.initializeArms();
-    localStorage.removeItem(scopedKey(STORAGE_KEY));
+    removeBanditState(STORAGE_KEY);
     console.log('[Bandit] Reset complete');
   }
 }

@@ -1,4 +1,4 @@
-import { scopedKey, registerBandit } from './storage';
+import { saveBanditState, loadBanditState, removeBanditState, registerBandit } from './storage';
 // Math Challenge Game Epsilon-Greedy Contextual Bandit
 // Adapts problem count, operations, number ranges, and time limits based on user performance
 
@@ -321,7 +321,7 @@ export class MathChallengeBandit {
         currentLevel: this.currentLevel,
         recentPerformance: this.recentPerformance
       };
-      localStorage.setItem(scopedKey('mathChallengeBandit'), JSON.stringify(state));
+      saveBanditState('mathChallengeBandit', state);
     } catch (e) {
       console.warn('Failed to save math challenge bandit state:', e);
     }
@@ -329,9 +329,8 @@ export class MathChallengeBandit {
 
   public loadState(): void {
     try {
-      const saved = localStorage.getItem(scopedKey('mathChallengeBandit'));
-      if (saved) {
-        const state = JSON.parse(saved);
+      const state = loadBanditState<any>('mathChallengeBandit');
+      if (state) {
         this.arms = new Map(state.arms);
         this.epsilon = state.epsilon || 0.3;
         this.totalPulls = state.totalPulls || 0;
@@ -350,7 +349,7 @@ export class MathChallengeBandit {
     this.currentLevel = 1;
     this.recentPerformance = [];
     this.initializeArms();
-    localStorage.removeItem(scopedKey('mathChallengeBandit'));
+    removeBanditState('mathChallengeBandit');
   }
 }
 
