@@ -117,8 +117,15 @@ export function registerBandit(b: BanditLike) {
 
 /** Called on login: switch all bandits to the new user's stored state. */
 export function bindBanditsToUser(userId: string) {
-  currentUserId = userId;
+  // Clear in-memory values before switching accounts so AI Lab never renders
+  // the previous user's stats while the new user's backend state is loading.
+  currentUserId = null;
   stateCache.clear();
+  for (const b of registry) {
+    try { b.reset?.(); } catch (e) { console.warn('[Bandit] pre-bind reset failed', e); }
+  }
+
+  currentUserId = userId;
 
   // Immediately re-read the user-scoped cache so the previous account's in-memory
   // stats are cleared before the backend request returns.
