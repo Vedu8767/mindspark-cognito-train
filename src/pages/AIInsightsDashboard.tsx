@@ -74,7 +74,12 @@ const AIInsightsDashboard = () => {
     const refresh = () => setGameBandits(collectBanditData());
     const interval = setInterval(refresh, 5000);
     window.addEventListener('focus', refresh);
-    return () => { clearInterval(interval); window.removeEventListener('focus', refresh); };
+    window.addEventListener('bandit-state-changed', refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('bandit-state-changed', refresh);
+    };
   }, []);
 
   const domainAverages = useMemo(() => {
