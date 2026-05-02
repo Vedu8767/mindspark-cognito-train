@@ -1,4 +1,4 @@
-import { scopedKey, registerBandit } from './storage';
+import { saveBanditState, loadBanditState, removeBanditState, registerBandit } from './storage';
 // Visual Processing Game Epsilon-Greedy Contextual Bandit
 
 export interface VisualContext {
@@ -296,7 +296,7 @@ export class VisualProcessingBandit {
         totalPulls: this.totalPulls,
         userProfile: this.userProfile,
       };
-      localStorage.setItem(scopedKey(this.storageKey), JSON.stringify(state));
+      saveBanditState(this.storageKey, state);
     } catch (e) {
       console.warn('Failed to save visual processing bandit state');
     }
@@ -304,9 +304,8 @@ export class VisualProcessingBandit {
 
   public loadState(): void {
     try {
-      const saved = localStorage.getItem(scopedKey(this.storageKey));
-      if (saved) {
-        const state = JSON.parse(saved);
+      const state = loadBanditState<any>(this.storageKey);
+      if (state) {
         this.arms = new Map(state.arms);
         this.epsilon = state.epsilon || 0.3;
         this.totalPulls = state.totalPulls || 0;
@@ -329,7 +328,7 @@ export class VisualProcessingBandit {
       speedLevel: 1,
     };
     this.initializeArms();
-    localStorage.removeItem(scopedKey(this.storageKey));
+    removeBanditState(this.storageKey);
   }
 }
 
