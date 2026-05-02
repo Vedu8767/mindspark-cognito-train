@@ -44,6 +44,11 @@ async function persistState(userId: string, name: string, state: unknown) {
 }
 
 export function saveBanditState(name: string, state: unknown): void {
+  if (!currentUserId) {
+    notifyBanditStateChanged();
+    return;
+  }
+
   stateCache.set(name, state);
 
   try {
@@ -52,14 +57,14 @@ export function saveBanditState(name: string, state: unknown): void {
     console.warn(`[Bandit] Failed to cache ${name}:`, e);
   }
 
-  if (currentUserId) {
-    void persistState(currentUserId, name, state);
-  }
+  void persistState(currentUserId, name, state);
 
   notifyBanditStateChanged();
 }
 
 export function loadBanditState<T = any>(name: string): T | null {
+  if (!currentUserId) return null;
+
   if (stateCache.has(name)) {
     return stateCache.get(name) as T;
   }
@@ -86,23 +91,26 @@ export function loadBanditState<T = any>(name: string): T | null {
 export function removeBanditState(name: string): void {
   stateCache.delete(name);
 
+  if (!currentUserId) {
+    notifyBanditStateChanged();
+    return;
+  }
+
   try {
     localStorage.removeItem(scopedKey(name));
   } catch (e) {
     console.warn(`[Bandit] Failed to clear ${name}:`, e);
   }
 
-  if (currentUserId) {
-    const userId = currentUserId;
-    void supabase
-      .from('user_bandit_states')
-      .delete()
-      .eq('user_id', userId)
-      .eq('bandit_name', name)
-      .then(({ error }) => {
-        if (error) console.warn(`[Bandit] Failed to remove ${name}:`, error.message);
-      });
-  }
+  const userId = currentUserId;
+  void supabase
+    .from('user_bandit_states')
+    .delete()
+    .eq('user_id', userId)
+    .eq('bandit_name', name)
+    .then(({ error }) => {
+      if (error) console.warn(`[Bandit] Failed to remove ${name}:`, error.message);
+    });
 
   notifyBanditStateChanged();
 }
