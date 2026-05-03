@@ -19,10 +19,17 @@ const Analytics = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getPatientSessions(500).then(data => {
+    const load = () => getPatientSessions(500).then(data => {
       setSessions(data);
       setLoading(false);
     });
+    load();
+    window.addEventListener('user-data-changed', load);
+    window.addEventListener('focus', load);
+    return () => {
+      window.removeEventListener('user-data-changed', load);
+      window.removeEventListener('focus', load);
+    };
   }, []);
 
   const stats = computeStats(sessions);
