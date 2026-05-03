@@ -55,10 +55,17 @@ const Achievements = () => {
 
   useEffect(() => {
     let cancelled = false;
-    loadAchievementsForCurrentUser().then(list => {
+    const refresh = () => loadAchievementsForCurrentUser().then(list => {
       if (!cancelled) setAchievements(list);
     });
-    return () => { cancelled = true; };
+    refresh();
+    window.addEventListener('user-data-changed', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('user-data-changed', refresh);
+      window.removeEventListener('focus', refresh);
+    };
   }, []);
 
   const unlockedCount = achievements.filter(a => a.unlocked).length;
