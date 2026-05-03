@@ -68,8 +68,8 @@ const GameCard = ({
             <TrendingUp className="h-3 w-3" />
             <span>Progress</span>
           </div>
-          <p className={`text-lg font-bold ${improvement && improvement > 0 ? 'text-success' : 'text-muted-foreground'}`}>
-            {improvement ? `+${improvement}%` : '--'}
+          <p className={`text-lg font-bold ${improvement && improvement > 0 ? 'text-success' : improvement && improvement < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {improvement ? `${improvement > 0 ? '+' : ''}${improvement}%` : '--'}
           </p>
         </div>
         
