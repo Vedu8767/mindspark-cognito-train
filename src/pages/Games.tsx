@@ -7,10 +7,14 @@ const Games = () => {
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
 
   useEffect(() => {
-    getPatientSessions(500).then(setSessions);
     const refresh = () => getPatientSessions(500).then(setSessions);
+    refresh();
     window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
+    window.addEventListener('user-data-changed', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('user-data-changed', refresh);
+    };
   }, []);
 
   const perGame = useMemo(() => {
