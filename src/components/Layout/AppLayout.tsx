@@ -121,6 +121,8 @@ const AppLayout = () => {
     }
 
     console.log(`[AppLayout] ${gameId} completed`, data);
+    // Notify pages that user data has changed so they can refresh from DB.
+    window.dispatchEvent(new CustomEvent('user-data-changed', { detail: { gameId } }));
     setCurrentGame(null);
     setCurrentPage('games');
   };

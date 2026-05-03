@@ -1,5 +1,6 @@
 // Achievement & Rewards System
 import { recordGameSession } from '@/lib/gameSessionService';
+import { supabase } from '@/integrations/supabase/client';
 export interface Achievement {
   id: string;
   title: string;
@@ -49,16 +50,99 @@ const ACHIEVEMENT_DEFINITIONS: Omit<Achievement, 'progress' | 'unlocked' | 'unlo
 
 const STORAGE_KEY = 'mci-achievements';
 
-function loadAchievements(): Achievement[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return JSON.parse(stored);
-  } catch {}
+// In-memory cache scoped per user. Reset whenever the active user changes.
+let activeUserId: string | null = null;
+let achievementCache: Achievement[] | null = null;
+
+function defaultAchievements(): Achievement[] {
   return ACHIEVEMENT_DEFINITIONS.map(def => ({ ...def, progress: 0, unlocked: false }));
 }
 
+function userScopedKey(userId: string): string {
+  return `${STORAGE_KEY}:${userId}`;
+}
+
+/** Reset the in-memory cache when a new user logs in/out. */
+export function setAchievementUser(userId: string | null) {
+  activeUserId = userId;
+  achievementCache = null;
+}
+
+function loadFromCache(): Achievement[] {
+  if (achievementCache) return achievementCache;
+  if (activeUserId) {
+    try {
+      const raw = localStorage.getItem(userScopedKey(activeUserId));
+      if (raw) {
+        achievementCache = JSON.parse(raw);
+        return achievementCache!;
+      }
+    } catch {}
+  }
+  achievementCache = defaultAchievements();
+  return achievementCache;
+}
+
+function persistCache() {
+  if (!activeUserId || !achievementCache) return;
+  try {
+    localStorage.setItem(userScopedKey(activeUserId), JSON.stringify(achievementCache));
+  } catch {}
+}
+
+/** Hydrate cache from Supabase for the current user. Safe for new users (returns defaults). */
+export async function loadAchievementsForCurrentUser(): Promise<Achievement[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    activeUserId = null;
+    achievementCache = defaultAchievements();
+    return achievementCache;
+  }
+  activeUserId = user.id;
+  const { data, error } = await supabase
+    .from('achievements')
+    .select('achievement_id, progress, unlocked, unlocked_at')
+    .eq('user_id', user.id);
+  const merged = defaultAchievements();
+  if (!error && data) {
+    for (const row of data as any[]) {
+      const a = merged.find(x => x.id === row.achievement_id);
+      if (a) {
+        a.progress = row.progress ?? 0;
+        a.unlocked = !!row.unlocked;
+        a.unlockedAt = row.unlocked_at ?? undefined;
+      }
+    }
+  }
+  achievementCache = merged;
+  persistCache();
+  return merged;
+}
+
+async function persistAchievementRow(a: Achievement) {
+  if (!activeUserId) return;
+  const { error } = await supabase
+    .from('achievements')
+    .upsert(
+      {
+        user_id: activeUserId,
+        achievement_id: a.id,
+        progress: a.progress,
+        unlocked: a.unlocked,
+        unlocked_at: a.unlockedAt ?? null,
+      },
+      { onConflict: 'user_id,achievement_id' }
+    );
+  if (error) console.warn('[Achievements] persist failed:', error.message);
+}
+
+function loadAchievements(): Achievement[] {
+  return loadFromCache();
+}
+
 function saveAchievements(achievements: Achievement[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(achievements));
+  achievementCache = achievements;
+  persistCache();
 }
 
 export function getAchievements(): Achievement[] {
@@ -77,6 +161,7 @@ export function updateAchievementProgress(id: string, progress: number): Achieve
   }
 
   saveAchievements(achievements);
+  void persistAchievementRow(achievement);
   return achievement.unlocked ? achievement : null;
 }
 
@@ -92,6 +177,7 @@ export function incrementAchievement(id: string, amount = 1): Achievement | null
   }
 
   saveAchievements(achievements);
+  void persistAchievementRow(achievement);
   return achievement.unlocked ? achievement : null;
 }
 
@@ -181,9 +267,13 @@ export interface GameHistoryEntry {
 
 const HISTORY_KEY = 'mci-game-history';
 
+function userHistoryKey(): string {
+  return activeUserId ? `${HISTORY_KEY}:${activeUserId}` : `${HISTORY_KEY}:guest`;
+}
+
 export function getGameHistory(): GameHistoryEntry[] {
   try {
-    const stored = localStorage.getItem(HISTORY_KEY);
+    const stored = localStorage.getItem(userHistoryKey());
     if (stored) return JSON.parse(stored);
   } catch {}
   return [];
@@ -198,7 +288,7 @@ export function addGameHistory(entry: Omit<GameHistoryEntry, 'id' | 'timestamp'>
   };
   history.push(newEntry);
   if (history.length > 500) history.splice(0, history.length - 500);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  try { localStorage.setItem(userHistoryKey(), JSON.stringify(history)); } catch {}
 
   // Also save to database (fire-and-forget)
   recordGameSession({

@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Trophy, Lock, Star, Flame, Gamepad2, Target, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
-import { getAchievements, TIER_COLORS, type Achievement } from '@/lib/achievements';
+import { getAchievements, loadAchievementsForCurrentUser, TIER_COLORS, type Achievement } from '@/lib/achievements';
 
 const CATEGORY_LABELS: Record<string, { label: string; icon: React.ElementType }> = {
   streak: { label: 'Streaks', icon: Flame },
@@ -51,7 +51,23 @@ const AchievementCard = ({ achievement }: { achievement: Achievement }) => {
 };
 
 const Achievements = () => {
-  const achievements = useMemo(() => getAchievements(), []);
+  const [achievements, setAchievements] = useState<Achievement[]>(() => getAchievements());
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => loadAchievementsForCurrentUser().then(list => {
+      if (!cancelled) setAchievements(list);
+    });
+    refresh();
+    window.addEventListener('user-data-changed', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('user-data-changed', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, []);
+
   const unlockedCount = achievements.filter(a => a.unlocked).length;
   const totalCount = achievements.length;
 

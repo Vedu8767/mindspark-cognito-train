@@ -1,17 +1,43 @@
+import { useEffect, useState, useMemo } from 'react';
 import { Brain, Eye, Zap, Target, Volume2, Calculator, Puzzle, Navigation } from 'lucide-react';
 import GameCard from '@/components/Games/GameCard';
+import { getPatientSessions, type SessionEntry } from '@/lib/patientDataService';
 
 const Games = () => {
-  const games = [
+  const [sessions, setSessions] = useState<SessionEntry[]>([]);
+
+  useEffect(() => {
+    const refresh = () => getPatientSessions(500).then(setSessions);
+    refresh();
+    window.addEventListener('focus', refresh);
+    window.addEventListener('user-data-changed', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('user-data-changed', refresh);
+    };
+  }, []);
+
+  const perGame = useMemo(() => {
+    const map: Record<string, { last: number; prev: number; count: number }> = {};
+    // sessions are ordered newest-first
+    for (const s of sessions) {
+      const m = map[s.gameId] || { last: -1, prev: -1, count: 0 };
+      if (m.last < 0) m.last = s.score;
+      else if (m.prev < 0) m.prev = s.score;
+      m.count++;
+      map[s.gameId] = m;
+    }
+    return map;
+  }, [sessions]);
+
+  const baseGames = [
     {
       id: 'memory-matching',
       title: 'Memory Matching',
       description: 'Flip cards to find matching pairs. Strengthens working memory and visual recognition skills.',
       domain: 'memory' as const,
       icon: Brain,
-      lastScore: 87,
-      improvement: 12,
-      difficulty: 'Adaptive Medium',
+      difficulty: 'Adaptive',
       estimatedTime: 5,
     },
     {
@@ -20,9 +46,7 @@ const Games = () => {
       description: 'Tap target objects among distractors. Improves selective attention and focus control.',
       domain: 'attention' as const,
       icon: Target,
-      lastScore: 89,
-      improvement: 15,
-      difficulty: 'Adaptive Hard',
+      difficulty: 'Adaptive',
       estimatedTime: 4,
     },
     {
@@ -31,9 +55,7 @@ const Games = () => {
       description: 'Quick responses to visual stimuli. Enhances processing speed and motor responses.',
       domain: 'processing' as const,
       icon: Zap,
-      lastScore: 78,
-      improvement: 8,
-      difficulty: 'Adaptive Medium',
+      difficulty: 'Adaptive',
       estimatedTime: 3,
     },
     {
@@ -42,9 +64,7 @@ const Games = () => {
       description: 'Identify patterns in sequences. Develops logical reasoning and pattern detection skills.',
       domain: 'executive' as const,
       icon: Puzzle,
-      lastScore: 82,
-      improvement: 10,
-      difficulty: 'Adaptive Medium',
+      difficulty: 'Adaptive',
       estimatedTime: 6,
     },
     {
@@ -53,9 +73,7 @@ const Games = () => {
       description: 'Remember and recall word lists. Strengthens verbal memory and language processing.',
       domain: 'memory' as const,
       icon: Brain,
-      lastScore: 85,
-      improvement: 7,
-      difficulty: 'Adaptive Easy',
+      difficulty: 'Adaptive',
       estimatedTime: 5,
     },
     {
@@ -64,9 +82,7 @@ const Games = () => {
       description: 'Solve mathematical problems quickly. Enhances numerical processing and mental math skills.',
       domain: 'executive' as const,
       icon: Calculator,
-      lastScore: 76,
-      improvement: 14,
-      difficulty: 'Adaptive Medium',
+      difficulty: 'Adaptive',
       estimatedTime: 7,
     },
     {
@@ -75,9 +91,7 @@ const Games = () => {
       description: 'Match and identify visual patterns. Improves visual-spatial processing abilities.',
       domain: 'processing' as const,
       icon: Eye,
-      lastScore: 91,
-      improvement: 6,
-      difficulty: 'Adaptive Hard',
+      difficulty: 'Adaptive',
       estimatedTime: 4,
     },
     {
@@ -86,9 +100,7 @@ const Games = () => {
       description: 'Multi-step task management. Develops planning, working memory, and cognitive flexibility.',
       domain: 'executive' as const,
       icon: Target,
-      lastScore: 73,
-      improvement: 11,
-      difficulty: 'Adaptive Medium',
+      difficulty: 'Adaptive',
       estimatedTime: 8,
     },
     {
@@ -97,9 +109,7 @@ const Games = () => {
       description: 'Navigate through virtual environments. Strengthens spatial memory and orientation skills.',
       domain: 'memory' as const,
       icon: Navigation,
-      lastScore: 80,
-      improvement: 9,
-      difficulty: 'Adaptive Medium',
+      difficulty: 'Adaptive',
       estimatedTime: 6,
     },
     {
@@ -108,9 +118,7 @@ const Games = () => {
       description: 'Rapid symbol matching tasks. Improves cognitive processing speed and accuracy.',
       domain: 'processing' as const,
       icon: Zap,
-      lastScore: 84,
-      improvement: 13,
-      difficulty: 'Adaptive Medium',
+      difficulty: 'Adaptive',
       estimatedTime: 3,
     },
     {
@@ -119,9 +127,7 @@ const Games = () => {
       description: 'Listen and recall sound sequences. Develops auditory memory and sequence recognition.',
       domain: 'memory' as const,
       icon: Volume2,
-      lastScore: 79,
-      improvement: 5,
-      difficulty: 'Adaptive Easy',
+      difficulty: 'Adaptive',
       estimatedTime: 5,
     },
     {
@@ -130,12 +136,17 @@ const Games = () => {
       description: 'Classic strategy puzzle game. Enhances problem-solving and planning abilities.',
       domain: 'executive' as const,
       icon: Puzzle,
-      lastScore: 88,
-      improvement: 16,
-      difficulty: 'Adaptive Hard',
+      difficulty: 'Adaptive',
       estimatedTime: 10,
     },
   ];
+
+  const games = baseGames.map(g => {
+    const stats = perGame[g.id];
+    const lastScore = stats?.last ?? 0;
+    const improvement = stats && stats.last >= 0 && stats.prev >= 0 ? stats.last - stats.prev : 0;
+    return { ...g, lastScore, improvement };
+  });
 
   const handlePlayGame = (gameId: string) => {
     // Dispatch event to start any game
