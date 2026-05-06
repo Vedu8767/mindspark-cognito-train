@@ -76,6 +76,31 @@ function getDomain(gameId: string, rawDomain?: string): string {
   return DOMAIN_MAP[gameId] || rawDomain || 'memory';
 }
 
+// Per-game maximum raw score used to normalize raw points into a 0–100 percentage.
+// These are calibrated to typical "excellent" performance for each game.
+const GAME_MAX_SCORE: Record<string, number> = {
+  'memory-matching': 100,
+  'word-memory': 100,
+  'audio-memory': 100,
+  'spatial-navigation': 1500,
+  'attention-focus': 500,
+  'reaction-speed': 500,
+  'processing-speed': 600,
+  'visual-processing': 400,
+  'pattern-recognition': 500,
+  'math-challenge': 400,
+  'executive-function': 500,
+  'tower-of-hanoi': 500,
+  'tower-hanoi': 500,
+};
+
+export function normalizeScore(gameId: string, rawScore: number): number {
+  const max = GAME_MAX_SCORE[gameId] ?? 100;
+  if (max <= 0) return 0;
+  const pct = Math.round((Math.max(0, rawScore) / max) * 100);
+  return Math.max(0, Math.min(100, pct));
+}
+
 export async function getPatientSessions(limit = 500): Promise<SessionEntry[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
@@ -93,7 +118,7 @@ export async function getPatientSessions(limit = 500): Promise<SessionEntry[]> {
     id: s.id,
     gameId: s.game_id,
     gameName: s.game_name,
-    score: s.score ?? 0,
+    score: normalizeScore(s.game_id, s.score ?? 0),
     level: s.level ?? 1,
     duration: s.duration ?? 0,
     completed: s.completed ?? false,
@@ -148,7 +173,9 @@ export function computeStats(sessions: SessionEntry[]): PatientStats {
 
   const thisWeekAvg = thisWeek.length ? thisWeek.reduce((s, h) => s + h.score, 0) / thisWeek.length : 0;
   const lastWeekAvg = lastWeek.length ? lastWeek.reduce((s, h) => s + h.score, 0) / lastWeek.length : 0;
-  const improvement = lastWeekAvg > 0 ? Math.round(((thisWeekAvg - lastWeekAvg) / lastWeekAvg) * 100) : 0;
+  const improvementRaw = lastWeekAvg > 0 ? Math.round(((thisWeekAvg - lastWeekAvg) / lastWeekAvg) * 100) : 0;
+  // Clamp improvement to a sensible range so UI never shows wild percentages.
+  const improvement = Math.max(-100, Math.min(100, improvementRaw));
 
   const uniqueGamesThisWeek = new Set(thisWeek.map(s => s.gameId)).size;
 
@@ -288,7 +315,7 @@ export function computeAnalyticsReport(sessions: SessionEntry[], userName: strin
 
   const domainChange = (recent: number, old: number) => {
     if (old === 0) return '+0%';
-    const diff = Math.round(((recent - old) / old) * 100);
+    const diff = Math.max(-100, Math.min(100, Math.round(((recent - old) / old) * 100)));
     return diff >= 0 ? `+${diff}% improvement` : `${diff}% change`;
   };
 
@@ -317,10 +344,10 @@ export function computeAnalyticsReport(sessions: SessionEntry[], userName: strin
     },
     gameStats,
     cognitiveData: {
-      memory: [olderDomain.memory || 50, domainScores.memory || 50],
-      attention: [olderDomain.attention || 50, domainScores.attention || 50],
-      executive: [olderDomain.executive || 50, domainScores.executive || 50],
-      processing: [olderDomain.processing || 50, domainScores.processing || 50],
+      memory: [olderDomain.memory, domainScores.memory],
+      attention: [olderDomain.attention, domainScores.attention],
+      executive: [olderDomain.executive, domainScores.executive],
+      processing: [olderDomain.processing, domainScores.processing],
     },
   };
 }

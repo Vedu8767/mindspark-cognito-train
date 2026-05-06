@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { normalizeScore } from '@/lib/patientDataService';
 
 // Types for doctor dashboard (replaces mockDoctorData types for real data)
 export interface PatientWithStats {
@@ -139,10 +140,10 @@ function computeDomainScores(sessions: any[]): { memory: number; attention: numb
   for (const s of sessions) {
     const d = s.domain?.toLowerCase();
     if (d && d in domains) {
-      (domains as any)[d].push(s.score);
+      (domains as any)[d].push(normalizeScore(s.game_id, s.score));
     }
   }
-  const avg = (arr: number[]) => arr.length === 0 ? 50 : Math.round(arr.slice(0, 20).reduce((a, b) => a + b, 0) / Math.min(arr.length, 20));
+  const avg = (arr: number[]) => arr.length === 0 ? 0 : Math.round(arr.slice(0, 20).reduce((a, b) => a + b, 0) / Math.min(arr.length, 20));
   return { memory: avg(domains.memory), attention: avg(domains.attention), executive: avg(domains.executive), processing: avg(domains.processing) };
 }
 
@@ -150,8 +151,8 @@ function computeTrend(sessions: any[]): 'improving' | 'stable' | 'declining' {
   if (sessions.length < 4) return 'stable';
   const recent = sessions.slice(0, Math.ceil(sessions.length / 2));
   const older = sessions.slice(Math.ceil(sessions.length / 2));
-  const avgRecent = recent.reduce((a: number, b: any) => a + b.score, 0) / recent.length;
-  const avgOlder = older.reduce((a: number, b: any) => a + b.score, 0) / older.length;
+  const avgRecent = recent.reduce((a: number, b: any) => a + normalizeScore(b.game_id, b.score), 0) / recent.length;
+  const avgOlder = older.reduce((a: number, b: any) => a + normalizeScore(b.game_id, b.score), 0) / older.length;
   const diff = avgRecent - avgOlder;
   if (diff > 5) return 'improving';
   if (diff < -5) return 'declining';
@@ -396,7 +397,7 @@ export async function fetchCohortTrend(
 
   const { data: sessions } = await supabase
     .from('game_sessions')
-    .select('score, user_id, created_at')
+    .select('score, user_id, created_at, game_id')
     .in('user_id', userIds)
     .gte('created_at', eightWeeksAgo.toISOString())
     .limit(1000);
@@ -413,7 +414,7 @@ export async function fetchCohortTrend(
     const ts = new Date(s.created_at).getTime();
     for (let i = buckets.length - 1; i >= 0; i--) {
       if (ts >= buckets[i].weekStart.getTime()) {
-        buckets[i].scores.push(s.score);
+        buckets[i].scores.push(normalizeScore((s as any).game_id, s.score));
         buckets[i].users.add(s.user_id);
         break;
       }
