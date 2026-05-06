@@ -16,6 +16,20 @@
     --card-secondary: 215 45% 96%;
     --card-foreground: 215 30% 20%;
     --card-border: 210 25% 88%;
+
+    /* Popover (dropdowns, selects, menus) */
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    /* Sidebar tokens */
+    --sidebar-background: 210 40% 98%;
+    --sidebar-foreground: 215 25% 15%;
+    --sidebar-primary: 215 70% 55%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 215 50% 90%;
+    --sidebar-accent-foreground: 215 25% 15%;
+    --sidebar-border: 210 25% 88%;
+    --sidebar-ring: 215 70% 55%;
     
     /* Glass effect variables */
     --glass-bg: 210 40% 98%;
