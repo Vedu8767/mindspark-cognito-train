@@ -103,7 +103,7 @@ const CognitiveAgeCard = ({ domainScores, sessionsCompleted = 0, chronologicalAg
             <div key={d.name} className="flex items-center justify-between">
               <span className="text-sm text-foreground w-24">{d.name}</span>
               <div className="flex-1 mx-3">
-                <Progress value={d.score} className="h-1.5" />
+                <Progress value={Math.max(0, Math.min(100, d.score))} className="h-1.5 bg-muted" />
               </div>
               <span className={`text-sm font-medium ${d.age < chronologicalAge ? 'text-success' : d.age > chronologicalAge ? 'text-destructive' : 'text-foreground'}`}>
                 {d.age}y

@@ -1,1 +1,36 @@
-I’ll fix this as a data-isolation issue across the whole patient experience, not just one screen.\n\n## What I found\n\nThe app already saves completed game sessions to the database per authenticated user, and dashboard/history/analytics mostly read from real `game_sessions` data. However, there are still several sources that can make a brand-new patient see old or fake data:\n\n1. Achievements are still stored in global browser `localStorage` using `mci-achievements`, so every patient using the same browser can see the previous patient’s unlocked achievements.\n2. The achievement completion logic reads from global local game history, so achievement progress can be calculated from another user’s previous sessions.\n3. The Games page still has hardcoded fake card values like last score, improvement, difficulty, and recommendations.\n4. AI Lab bandits are database-backed now, but the UI still treats default bandit model values as real skill data. A new user can see non-zero “skill” or “level” even with zero AI decisions, which looks like previous/fake data.\n5. Some report/analytics fallback values use `50` for domains with no data, which can create fake-looking AI insights for new users.\n\n## Plan\n\n### 1. Make achievements fully per-user and database-backed\n- Replace the global `localStorage` achievement store with database reads/writes to the existing `achievements` table.\n- Add async helpers such as:\n  - `getUserAchievements()`\n  - `updateUserAchievementProgress()`\n  - `incrementUserAchievement()`\n  - `checkUserGameAchievements()`\n- Keep the achievement definitions in code, but merge them with the current user’s database rows.\n- Ensure a new patient with no rows sees all achievements locked at `0` progress.\n- Update `Achievements.tsx` to load achievements for the current authenticated user and show a loading/empty-safe state.\n\n### 2. Stop using global game history for achievement calculations\n- Refactor `addGameHistory` / game completion flow so the source of truth is the saved `game_sessions` row for the current user.\n- Use the current user’s database sessions to calculate:\n  - first game\n  - session count achievements\n  - unique games played\n  - perfect scores\n  - speed/time-based achievements\n- Keep any offline fallback strictly user-scoped, never shared under `mci-game-history`.\n\n### 3. Harden AI Lab against cross-user and fake default values\n- Adjust `src/lib/bandit/storage.ts` so rebinding to a new user resets in-memory bandits without calling destructive remove logic, then loads only that user’s database state.\n- Add a non-destructive `clearForAuthSwitch` reset path for all bandits, separate from “delete/reset my model”.\n- Update AI Lab display logic:\n  - If a bandit has `totalPulls === 0`, show skill as `0%`, level as `1/25`, and status as “No data yet”.\n 
+# Fix two GUI glitches
+
+## Problem 1 — Transparent dropdown in "Create Training Plan"
+
+In the screenshot, the **Add Games** dropdown shows through the dialog: game names overlap "Plan Name", "Patient", etc.
+
+**Root cause:** `src/index.css` defines `--popover` only inside the `.dark` block. In light mode (the active theme) the variable is undefined, so `bg-popover` on `SelectContent` resolves to a transparent background. The same applies to `--popover-foreground`, `--card`, `--card-foreground`, and the sidebar tokens — all are missing from `:root`.
+
+**Fix:** Add the missing light-mode tokens to `:root` in `src/index.css`:
+
+```
+--popover: 0 0% 100%;
+--popover-foreground: 215 25% 15%;
+--card: 210 40% 98%;            (already-ish present, ensure declared)
+--card-foreground: 215 30% 20%;
+--sidebar-background / -foreground / -primary / -accent / -border / -ring
+```
+
+This restores an opaque white dropdown panel matching the rest of the light UI. No component changes needed — the existing `bg-popover` class will then render correctly across every Select / Popover / DropdownMenu in the app.
+
+## Problem 2 — Cognitive Age domain bars look "overflowed"
+
+The pink/purple segment past the blue fill in the Domain Ages section isn't an overflow bug — it's the unfilled track color. `Progress` uses `bg-secondary`, which is mapped to soft purple (`265 45% 70%`). At a glance it reads as "the bar exceeds 100%".
+
+**Fix in `src/components/Dashboard/CognitiveAgeCard.tsx`:**
+- Pass a neutral track class to the domain `Progress`: `className="h-1.5 bg-muted"` so the unfilled portion is light gray instead of purple.
+- Clamp `d.score` to `0–100` defensively when passed to `Progress` (guards against any future >100 values).
+
+No other behavior changes; layout, ages, and trend logic remain identical.
+
+## Files touched
+- `src/index.css` — add missing light-mode CSS variables
+- `src/components/Dashboard/CognitiveAgeCard.tsx` — neutral track + clamp
+
+## Out of scope
+No database, RLS, or data-flow changes. Purely visual fixes.
