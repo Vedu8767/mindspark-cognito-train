@@ -173,7 +173,9 @@ export function computeStats(sessions: SessionEntry[]): PatientStats {
 
   const thisWeekAvg = thisWeek.length ? thisWeek.reduce((s, h) => s + h.score, 0) / thisWeek.length : 0;
   const lastWeekAvg = lastWeek.length ? lastWeek.reduce((s, h) => s + h.score, 0) / lastWeek.length : 0;
-  const improvement = lastWeekAvg > 0 ? Math.round(((thisWeekAvg - lastWeekAvg) / lastWeekAvg) * 100) : 0;
+  const improvementRaw = lastWeekAvg > 0 ? Math.round(((thisWeekAvg - lastWeekAvg) / lastWeekAvg) * 100) : 0;
+  // Clamp improvement to a sensible range so UI never shows wild percentages.
+  const improvement = Math.max(-100, Math.min(100, improvementRaw));
 
   const uniqueGamesThisWeek = new Set(thisWeek.map(s => s.gameId)).size;
 
@@ -313,7 +315,7 @@ export function computeAnalyticsReport(sessions: SessionEntry[], userName: strin
 
   const domainChange = (recent: number, old: number) => {
     if (old === 0) return '+0%';
-    const diff = Math.round(((recent - old) / old) * 100);
+    const diff = Math.max(-100, Math.min(100, Math.round(((recent - old) / old) * 100)));
     return diff >= 0 ? `+${diff}% improvement` : `${diff}% change`;
   };
 
