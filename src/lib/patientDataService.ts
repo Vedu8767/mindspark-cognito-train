@@ -344,10 +344,10 @@ export function computeAnalyticsReport(sessions: SessionEntry[], userName: strin
     },
     gameStats,
     cognitiveData: {
-      memory: [olderDomain.memory || 50, domainScores.memory || 50],
-      attention: [olderDomain.attention || 50, domainScores.attention || 50],
-      executive: [olderDomain.executive || 50, domainScores.executive || 50],
-      processing: [olderDomain.processing || 50, domainScores.processing || 50],
+      memory: [olderDomain.memory, domainScores.memory],
+      attention: [olderDomain.attention, domainScores.attention],
+      executive: [olderDomain.executive, domainScores.executive],
+      processing: [olderDomain.processing, domainScores.processing],
     },
   };
 }
