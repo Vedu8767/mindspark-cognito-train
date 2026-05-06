@@ -397,7 +397,7 @@ export async function fetchCohortTrend(
 
   const { data: sessions } = await supabase
     .from('game_sessions')
-    .select('score, user_id, created_at')
+    .select('score, user_id, created_at, game_id')
     .in('user_id', userIds)
     .gte('created_at', eightWeeksAgo.toISOString())
     .limit(1000);
