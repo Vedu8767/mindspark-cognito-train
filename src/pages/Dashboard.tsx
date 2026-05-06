@@ -6,7 +6,7 @@ import ProgressCard from '@/components/Dashboard/ProgressCard';
 import CognitiveChart from '@/components/Dashboard/CognitiveChart';
 import StatsOverview from '@/components/Dashboard/StatsOverview';
 import ActivityFeed from '@/components/Dashboard/ActivityFeed';
-import QuickActions from '@/components/Dashboard/QuickActions';
+import AssignedTraining from '@/components/Dashboard/AssignedTraining';
 import CognitiveAgeCard from '@/components/Dashboard/CognitiveAgeCard';
 import ProgressHeatmap from '@/components/Dashboard/ProgressHeatmap';
 import {
@@ -99,7 +99,7 @@ const Dashboard = () => {
             </div>
           </div>
           <ProgressHeatmap activityData={heatmapData} />
-          <QuickActions />
+          <AssignedTraining />
         </TabsContent>
 
         <TabsContent value="progress" className="space-y-6">
