@@ -94,7 +94,12 @@ const AssignedTraining = () => {
                       <Button
                         size="sm"
                         className="w-full mt-2"
-                        onClick={() => navigate(`/games?play=${encodeURIComponent(g.gameId)}`)}
+                        onClick={() => {
+                          navigate('/games');
+                          setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('startGame', { detail: g.gameId }));
+                          }, 50);
+                        }}
                       >
                         <Play className="h-3 w-3 mr-2" /> Play now
                       </Button>
