@@ -7,7 +7,6 @@ import CognitiveChart from '@/components/Dashboard/CognitiveChart';
 import StatsOverview from '@/components/Dashboard/StatsOverview';
 import ActivityFeed from '@/components/Dashboard/ActivityFeed';
 import AssignedTraining from '@/components/Dashboard/AssignedTraining';
-import CognitiveAgeCard from '@/components/Dashboard/CognitiveAgeCard';
 import ProgressHeatmap from '@/components/Dashboard/ProgressHeatmap';
 import {
   getPatientSessions, computeStats, computeDomainScores,
@@ -90,14 +89,7 @@ const Dashboard = () => {
 
         <TabsContent value="overview" className="space-y-6">
           <StatsOverview data={stats} />
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <CognitiveChart data={chartData} />
-            </div>
-            <div className="space-y-6">
-              <CognitiveAgeCard domainScores={domainScores} sessionsCompleted={stats.totalSessions} />
-            </div>
-          </div>
+          <CognitiveChart data={chartData} />
           <ProgressHeatmap activityData={heatmapData} />
           <AssignedTraining />
         </TabsContent>
