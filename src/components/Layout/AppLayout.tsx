@@ -81,7 +81,14 @@ const AppLayout = () => {
       setCurrentGame(event.detail);
     };
     window.addEventListener('startGame', handleStartGame);
-    return () => window.removeEventListener('startGame', handleStartGame);
+    const handleNavigate = (event: any) => {
+      if (typeof event.detail === 'string') setCurrentPage(event.detail);
+    };
+    window.addEventListener('app-navigate', handleNavigate);
+    return () => {
+      window.removeEventListener('startGame', handleStartGame);
+      window.removeEventListener('app-navigate', handleNavigate);
+    };
   }, []);
 
   const handleGameComplete = (payload: GameCompletionPayload | number) => {
