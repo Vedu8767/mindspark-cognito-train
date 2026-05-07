@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ClipboardList, Play, Stethoscope, Calendar, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { getMyTrainingPlans, type AssignedPlan } from '@/lib/patientTrainingPlans';
 
 const AssignedTraining = () => {
-  const navigate = useNavigate();
   const [plans, setPlans] = useState<AssignedPlan[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,7 +47,7 @@ const AssignedTraining = () => {
             <p className="text-sm text-muted-foreground">
               Your doctor will assign personalized games here.
             </p>
-            <Button variant="outline" size="sm" onClick={() => navigate('/games')}>
+            <Button variant="outline" size="sm" onClick={() => window.dispatchEvent(new CustomEvent('app-navigate', { detail: 'games' }))}>
               <Play className="h-4 w-4 mr-2" /> Browse all games
             </Button>
           </div>
@@ -95,10 +93,7 @@ const AssignedTraining = () => {
                         size="sm"
                         className="w-full mt-2"
                         onClick={() => {
-                          navigate('/games');
-                          setTimeout(() => {
-                            window.dispatchEvent(new CustomEvent('startGame', { detail: g.gameId }));
-                          }, 50);
+                          window.dispatchEvent(new CustomEvent('startGame', { detail: g.gameId }));
                         }}
                       >
                         <Play className="h-3 w-3 mr-2" /> Play now
