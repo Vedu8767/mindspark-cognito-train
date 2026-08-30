@@ -23,6 +23,7 @@ const Header = ({ currentPage, onNavigate }: HeaderProps) => {
     { id: 'ai-dashboard', label: 'AI Lab', icon: Cpu },
     { id: 'analytics', label: 'Progress', icon: BarChart3 },
     { id: 'articles', label: 'Brain Health', icon: BookOpen },
+    { id: 'guide', label: 'Guide', icon: HelpCircle },
   ];
 
   const toggleSound = () => {
