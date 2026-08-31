@@ -172,11 +172,11 @@ const AppLayout = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary">
-
       <Header currentPage={currentPage} onNavigate={setCurrentPage} />
       <main className="container mx-auto px-4 lg:px-6 py-8">
         {renderPage()}
       </main>
+      <WelcomeTour onOpenGuide={() => setCurrentPage('guide')} />
       {achievementQueue.length > 0 && (
         <AchievementToast
           achievement={achievementQueue[0]}
