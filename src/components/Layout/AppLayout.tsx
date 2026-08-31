@@ -149,6 +149,7 @@ const AppLayout = () => {
       return (
         <Suspense fallback={<GameLoader />}>
           <GameComponent onComplete={handleGameComplete} onExit={handleGameExit} />
+          <GameHelpButton gameId={currentGame} />
         </Suspense>
       );
     }
@@ -164,12 +165,14 @@ const AppLayout = () => {
       case 'history': return <GameHistoryPage />;
       case 'analytics': return <Analytics />;
       case 'articles': return <Articles />;
+      case 'guide': return <PatientGuide onNavigate={setCurrentPage} />;
       default: return <Dashboard />;
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background to-background-secondary">
+
       <Header currentPage={currentPage} onNavigate={setCurrentPage} />
       <main className="container mx-auto px-4 lg:px-6 py-8">
         {renderPage()}
