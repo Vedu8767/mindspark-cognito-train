@@ -9,6 +9,9 @@ import AIInsightsDashboard from '@/pages/AIInsightsDashboard';
 import DailyChallengePage from '@/pages/DailyChallengePage';
 import Achievements from '@/pages/Achievements';
 import GameHistoryPage from '@/pages/GameHistory';
+import PatientGuide from '@/pages/PatientGuide';
+import GameHelpButton from '@/components/Guide/GameHelpButton';
+import WelcomeTour from '@/components/Guide/WelcomeTour';
 import AchievementToast from '@/components/AchievementToast';
 import { checkGameAchievements, addGameHistory, type Achievement } from '@/lib/achievements';
 import { soundManager } from '@/lib/soundManager';
@@ -146,6 +149,7 @@ const AppLayout = () => {
       return (
         <Suspense fallback={<GameLoader />}>
           <GameComponent onComplete={handleGameComplete} onExit={handleGameExit} />
+          <GameHelpButton gameId={currentGame} />
         </Suspense>
       );
     }
@@ -161,6 +165,7 @@ const AppLayout = () => {
       case 'history': return <GameHistoryPage />;
       case 'analytics': return <Analytics />;
       case 'articles': return <Articles />;
+      case 'guide': return <PatientGuide onNavigate={setCurrentPage} />;
       default: return <Dashboard />;
     }
   };
@@ -171,6 +176,7 @@ const AppLayout = () => {
       <main className="container mx-auto px-4 lg:px-6 py-8">
         {renderPage()}
       </main>
+      <WelcomeTour onOpenGuide={() => setCurrentPage('guide')} />
       {achievementQueue.length > 0 && (
         <AchievementToast
           achievement={achievementQueue[0]}

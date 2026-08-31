@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2, LogOut, Cpu, Target, Trophy, Clock, Volume2, VolumeX } from 'lucide-react';
+import { Menu, X, Brain, User, BarChart3, BookOpen, Gamepad2, LogOut, Cpu, Target, Trophy, Clock, Volume2, VolumeX, HelpCircle } from 'lucide-react';
 import { soundManager } from '@/lib/soundManager';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
