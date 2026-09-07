@@ -279,10 +279,21 @@ export function getGameHistory(): GameHistoryEntry[] {
   return [];
 }
 
-export function addGameHistory(entry: Omit<GameHistoryEntry, 'id' | 'timestamp'>): GameHistoryEntry {
+/** Optional telemetry persisted alongside the session (matches game_sessions columns). */
+export interface GameHistoryTelemetry {
+  accuracy?: number;
+  reactionTime?: number;
+  moves?: number;
+  metadata?: Record<string, any>;
+}
+
+export function addGameHistory(
+  entry: Omit<GameHistoryEntry, 'id' | 'timestamp'> & GameHistoryTelemetry
+): GameHistoryEntry {
   const history = getGameHistory();
+  const { accuracy, reactionTime, moves, metadata, ...base } = entry;
   const newEntry: GameHistoryEntry = {
-    ...entry,
+    ...base,
     id: crypto.randomUUID(),
     timestamp: new Date().toISOString(),
   };
@@ -290,16 +301,20 @@ export function addGameHistory(entry: Omit<GameHistoryEntry, 'id' | 'timestamp'>
   if (history.length > 500) history.splice(0, history.length - 500);
   try { localStorage.setItem(userHistoryKey(), JSON.stringify(history)); } catch {}
 
-  // Also save to database (fire-and-forget)
+  // Also save to database (fire-and-forget), including the full telemetry payload.
   recordGameSession({
-    gameId: entry.gameId,
-    gameName: entry.gameName,
-    domain: entry.domain,
-    score: entry.score,
-    level: entry.level,
-    duration: entry.duration,
-    completed: entry.completed,
-    difficulty: entry.difficulty,
+    gameId: base.gameId,
+    gameName: base.gameName,
+    domain: base.domain,
+    score: base.score,
+    level: base.level,
+    duration: base.duration,
+    completed: base.completed,
+    difficulty: base.difficulty,
+    accuracy,
+    reactionTime,
+    moves,
+    metadata,
   }).catch(() => {});
 
   return newEntry;
