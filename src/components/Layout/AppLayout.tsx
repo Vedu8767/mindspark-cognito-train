@@ -104,6 +104,12 @@ const AppLayout = () => {
         ? { score: payload, level: 1, duration: 0, completed: true, difficulty: 'Adaptive' }
         : { difficulty: 'Adaptive', ...payload };
 
+    const rewardResult = computeReward(gameId, {
+      completed: data.completed,
+      accuracy: data.accuracy,
+      speed: data.reactionTime ? speedFromReactionTime(data.reactionTime) : undefined,
+    });
+
     addGameHistory({
       gameId,
       gameName: meta.name,
@@ -113,6 +119,18 @@ const AppLayout = () => {
       completed: data.completed,
       domain: meta.domain,
       difficulty: data.difficulty || 'Adaptive',
+      accuracy: data.accuracy,
+      reactionTime: data.reactionTime,
+      moves: data.moves,
+      metadata: {
+        banditKey: gameId,
+        policyVersion: POLICY_VERSION,
+        reward: rewardResult.reward,
+        rewardComponents: rewardResult.components,
+        rewardVersion: rewardResult.version,
+        selectedLevel: data.level,
+        difficulty: data.difficulty || 'Adaptive',
+      },
     });
 
     const newlyUnlocked = checkGameAchievements({
