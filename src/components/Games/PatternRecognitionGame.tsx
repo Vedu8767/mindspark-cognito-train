@@ -321,7 +321,19 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     patternRecognitionBandit.setLevel(levelToSave);
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    const totals = sessionTotals.current;
+    onComplete({
+      score,
+      level: currentLevel,
+      duration: Math.max(0, Math.round((Date.now() - sessionStart) / 1000)),
+      completed: succeededLevel,
+      difficulty: currentAction
+        ? `Level ${currentLevel} · ${currentAction.patternCount ?? patterns.length} patterns · ${currentAction.optionCount} options`
+        : `Level ${currentLevel}`,
+      accuracy: totals.answered > 0 ? totals.correct / totals.answered : undefined,
+      reactionTime: totals.answered > 0 ? totals.timeMs / totals.answered : undefined,
+      moves: totals.answered,
+    });
   };
 
   const endGame = () => {
