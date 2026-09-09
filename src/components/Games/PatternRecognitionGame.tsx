@@ -33,6 +33,11 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
   const [levelComplete, setLevelComplete] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [lastCorrect, setLastCorrect] = useState<boolean | null>(null);
+  /** Patterns answered in the current level — the correct accuracy denominator. */
+  const [answeredCount, setAnsweredCount] = useState(0);
+  /** Whole-session totals used for the completion payload (all levels combined). */
+  const [sessionStart] = useState(() => Date.now());
+  const sessionTotals = useRef({ answered: 0, correct: 0, timeMs: 0 });
   
   // Bandit state
   const [currentAction, setCurrentAction] = useState<PatternAction | null>(null);
@@ -50,7 +55,8 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     
     return {
       currentLevel,
-      recentAccuracy: patterns.length > 0 ? correctAnswers / Math.max(1, currentPattern) : 0.5,
+      // Denominator is the number of patterns actually answered (not the 0-indexed cursor).
+      recentAccuracy: answeredCount > 0 ? correctAnswers / answeredCount : 0.5,
       recentSpeed: avgTime < 2000 ? 1 : avgTime < 4000 ? 0.7 : 0.4,
       sessionLength: (Date.now() - levelStartTime) / 1000,
       timeOfDay: new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening',
@@ -61,7 +67,7 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
       frustrationLevel: correctAnswers < currentPattern * 0.3 ? 0.7 : 0.2,
       engagementLevel: 0.8,
       preferredGridSize: 4,
-      successRate: correctAnswers / Math.max(1, currentPattern),
+      successRate: answeredCount > 0 ? correctAnswers / answeredCount : 0.5,
       dayOfWeek: new Date().getDay(),
       avgPatternTime: avgTime,
       patternTypePreference: 'mixed',
@@ -275,14 +281,10 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setNextLevelPrediction(prediction);
     setPerformanceInsight(insight);
     
-    // Calculate next level (strict ±1 progression)
-    const nextLevel = patternRecognitionBandit.getOptimalLevel(context);
-    
+    // NOTE: the bandit's level is intentionally NOT changed here. It only moves
+    // when the user explicitly chooses Next / Replay / Save & Exit.
     setLevelComplete(true);
     setBanditStats(patternRecognitionBandit.getStats());
-    
-    // Store next level for progression
-    patternRecognitionBandit.setLevel(nextLevel);
   };
 
   const succeededLevel = patterns.length > 0 && correctAnswers / patterns.length >= 0.5;
