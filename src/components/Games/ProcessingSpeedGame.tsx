@@ -63,7 +63,10 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
     return {
       currentLevel,
       recentAccuracy,
-      recentSpeed: timeLeft > 0 ? 1 - (timeLeft / (currentAction?.timeLimit || 90)) : 0.5,
+      // Higher = faster: the share of the allowed time still unused.
+      recentSpeed: currentAction?.timeLimit
+        ? Math.max(0, Math.min(1, timeLeft / currentAction.timeLimit))
+        : 0.5,
       avgResponseTime,
       sessionLength: (Date.now() - sessionStart) / 1000,
       timeOfDay,
