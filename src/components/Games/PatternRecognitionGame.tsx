@@ -5,6 +5,7 @@ import { patternRecognitionBandit, PatternContext, PatternAction } from '@/lib/b
 import { PerformanceMetrics } from '@/lib/bandit/types';
 import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
+import type { GameComponentProps } from '@/lib/gameCompletion';
 
 interface Pattern {
   sequence: string[];
@@ -13,10 +14,7 @@ interface Pattern {
   type: 'number' | 'shape' | 'letter';
 }
 
-interface PatternRecognitionGameProps {
-  onComplete: (score: number) => void;
-  onExit: () => void;
-}
+type PatternRecognitionGameProps = GameComponentProps;
 
 const SHAPES = ['🔴', '🟡', '🟢', '🔵', '🟣', '🟠', '⚫', '⚪', '🔺', '🔸', '⭐', '❤️'];
 const NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
