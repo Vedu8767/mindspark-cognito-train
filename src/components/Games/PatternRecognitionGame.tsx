@@ -182,6 +182,7 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setCurrentPattern(0);
     setTimeLeft(currentAction.timeLimit);
     setCorrectAnswers(0);
+    setAnsweredCount(0);
     setPatternTimes([]);
   }, [currentAction]);
 
@@ -225,6 +226,10 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setSelectedAnswer(answer);
     const isCorrect = answer === patterns[currentPattern].answer;
     setLastCorrect(isCorrect);
+    setAnsweredCount(prev => prev + 1);
+    sessionTotals.current.answered += 1;
+    sessionTotals.current.timeMs += responseTime;
+    if (isCorrect) sessionTotals.current.correct += 1;
     
     if (isCorrect) {
       const basePoints = 100;
