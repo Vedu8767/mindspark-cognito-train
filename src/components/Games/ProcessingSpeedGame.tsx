@@ -4,11 +4,9 @@ import { Button } from '@/components/ui/button';
 import { processingSpeedBandit, type ProcessingContext, type ProcessingAction } from '@/lib/bandit/processingSpeedBandit';
 import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
+import type { GameComponentProps } from '@/lib/gameCompletion';
 
-interface ProcessingSpeedGameProps {
-  onComplete: (score: number) => void;
-  onExit: () => void;
-}
+type ProcessingSpeedGameProps = GameComponentProps;
 
 interface Symbol {
   id: number;
