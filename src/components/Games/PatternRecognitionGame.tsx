@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Puzzle, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { patternRecognitionBandit, PatternContext, PatternAction } from '@/lib/bandit/patternBandit';
