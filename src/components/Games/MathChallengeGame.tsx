@@ -4,11 +4,9 @@ import { Button } from '@/components/ui/button';
 import { mathChallengeBandit, type MathContext, type MathAction } from '@/lib/bandit/mathChallengeBandit';
 import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
+import type { GameComponentProps } from '@/lib/gameCompletion';
 
-interface MathChallengeGameProps {
-  onComplete: (score: number) => void;
-  onExit: () => void;
-}
+type MathChallengeGameProps = GameComponentProps;
 
 interface Problem {
   id: number;

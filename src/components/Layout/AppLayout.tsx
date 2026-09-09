@@ -15,6 +15,8 @@ import WelcomeTour from '@/components/Guide/WelcomeTour';
 import AchievementToast from '@/components/AchievementToast';
 import { checkGameAchievements, addGameHistory, type Achievement } from '@/lib/achievements';
 import { soundManager } from '@/lib/soundManager';
+import { computeReward, speedFromReactionTime } from '@/lib/bandit/reward';
+import { POLICY_VERSION } from '@/lib/bandit/policy';
 
 /** Payload each game sends back when the user explicitly chooses Save & Exit. */
 export interface GameCompletionPayload {

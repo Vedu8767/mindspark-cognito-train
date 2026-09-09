@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Puzzle, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { patternRecognitionBandit, PatternContext, PatternAction } from '@/lib/bandit/patternBandit';
 import { PerformanceMetrics } from '@/lib/bandit/types';
 import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
+import type { GameComponentProps } from '@/lib/gameCompletion';
 
 interface Pattern {
   sequence: string[];
@@ -13,10 +14,7 @@ interface Pattern {
   type: 'number' | 'shape' | 'letter';
 }
 
-interface PatternRecognitionGameProps {
-  onComplete: (score: number) => void;
-  onExit: () => void;
-}
+type PatternRecognitionGameProps = GameComponentProps;
 
 const SHAPES = ['🔴', '🟡', '🟢', '🔵', '🟣', '🟠', '⚫', '⚪', '🔺', '🔸', '⭐', '❤️'];
 const NUMBERS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -35,6 +33,11 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
   const [levelComplete, setLevelComplete] = useState(false);
   const [showResult, setShowResult] = useState(false);
   const [lastCorrect, setLastCorrect] = useState<boolean | null>(null);
+  /** Patterns answered in the current level — the correct accuracy denominator. */
+  const [answeredCount, setAnsweredCount] = useState(0);
+  /** Whole-session totals used for the completion payload (all levels combined). */
+  const [sessionStart] = useState(() => Date.now());
+  const sessionTotals = useRef({ answered: 0, correct: 0, timeMs: 0 });
   
   // Bandit state
   const [currentAction, setCurrentAction] = useState<PatternAction | null>(null);
@@ -52,7 +55,8 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     
     return {
       currentLevel,
-      recentAccuracy: patterns.length > 0 ? correctAnswers / Math.max(1, currentPattern) : 0.5,
+      // Denominator is the number of patterns actually answered (not the 0-indexed cursor).
+      recentAccuracy: answeredCount > 0 ? correctAnswers / answeredCount : 0.5,
       recentSpeed: avgTime < 2000 ? 1 : avgTime < 4000 ? 0.7 : 0.4,
       sessionLength: (Date.now() - levelStartTime) / 1000,
       timeOfDay: new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening',
@@ -63,7 +67,7 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
       frustrationLevel: correctAnswers < currentPattern * 0.3 ? 0.7 : 0.2,
       engagementLevel: 0.8,
       preferredGridSize: 4,
-      successRate: correctAnswers / Math.max(1, currentPattern),
+      successRate: answeredCount > 0 ? correctAnswers / answeredCount : 0.5,
       dayOfWeek: new Date().getDay(),
       avgPatternTime: avgTime,
       patternTypePreference: 'mixed',
@@ -178,6 +182,7 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setCurrentPattern(0);
     setTimeLeft(currentAction.timeLimit);
     setCorrectAnswers(0);
+    setAnsweredCount(0);
     setPatternTimes([]);
   }, [currentAction]);
 
@@ -221,6 +226,10 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setSelectedAnswer(answer);
     const isCorrect = answer === patterns[currentPattern].answer;
     setLastCorrect(isCorrect);
+    setAnsweredCount(prev => prev + 1);
+    sessionTotals.current.answered += 1;
+    sessionTotals.current.timeMs += responseTime;
+    if (isCorrect) sessionTotals.current.correct += 1;
     
     if (isCorrect) {
       const basePoints = 100;
@@ -277,14 +286,10 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     setNextLevelPrediction(prediction);
     setPerformanceInsight(insight);
     
-    // Calculate next level (strict ±1 progression)
-    const nextLevel = patternRecognitionBandit.getOptimalLevel(context);
-    
+    // NOTE: the bandit's level is intentionally NOT changed here. It only moves
+    // when the user explicitly chooses Next / Replay / Save & Exit.
     setLevelComplete(true);
     setBanditStats(patternRecognitionBandit.getStats());
-    
-    // Store next level for progression
-    patternRecognitionBandit.setLevel(nextLevel);
   };
 
   const succeededLevel = patterns.length > 0 && correctAnswers / patterns.length >= 0.5;
@@ -316,7 +321,19 @@ const PatternRecognitionGame = ({ onComplete, onExit }: PatternRecognitionGamePr
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     patternRecognitionBandit.setLevel(levelToSave);
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    const totals = sessionTotals.current;
+    onComplete({
+      score,
+      level: currentLevel,
+      duration: Math.max(0, Math.round((Date.now() - sessionStart) / 1000)),
+      completed: succeededLevel,
+      difficulty: currentAction
+        ? `Level ${currentLevel} · ${currentAction.patternCount ?? patterns.length} patterns · ${currentAction.optionCount} options`
+        : `Level ${currentLevel}`,
+      accuracy: totals.answered > 0 ? totals.correct / totals.answered : undefined,
+      reactionTime: totals.answered > 0 ? totals.timeMs / totals.answered : undefined,
+      moves: totals.answered,
+    });
   };
 
   const endGame = () => {

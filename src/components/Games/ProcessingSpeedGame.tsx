@@ -4,11 +4,9 @@ import { Button } from '@/components/ui/button';
 import { processingSpeedBandit, type ProcessingContext, type ProcessingAction } from '@/lib/bandit/processingSpeedBandit';
 import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
+import type { GameComponentProps } from '@/lib/gameCompletion';
 
-interface ProcessingSpeedGameProps {
-  onComplete: (score: number) => void;
-  onExit: () => void;
-}
+type ProcessingSpeedGameProps = GameComponentProps;
 
 interface Symbol {
   id: number;
@@ -65,7 +63,10 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
     return {
       currentLevel,
       recentAccuracy,
-      recentSpeed: timeLeft > 0 ? 1 - (timeLeft / (currentAction?.timeLimit || 90)) : 0.5,
+      // Higher = faster: the share of the allowed time still unused.
+      recentSpeed: currentAction?.timeLimit
+        ? Math.max(0, Math.min(1, timeLeft / currentAction.timeLimit))
+        : 0.5,
       avgResponseTime,
       sessionLength: (Date.now() - sessionStart) / 1000,
       timeOfDay,
@@ -266,7 +267,26 @@ const ProcessingSpeedGame = ({ onComplete, onExit }: ProcessingSpeedGameProps) =
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+
+    const completedTrials = trials.filter(t => t.completed);
+    const totalPossible = currentAction ? currentAction.trialCount * currentAction.gridSize : 0;
+    const avgResponseTime = completedTrials.length > 0
+      ? completedTrials.reduce((sum, t) => sum + t.timeSpent, 0) / completedTrials.length
+      : undefined;
+
+    onComplete({
+      score,
+      // The level the bandit actually selected and the game applied.
+      level: currentLevel,
+      duration: Math.max(0, Math.round((Date.now() - sessionStart) / 1000)),
+      completed: succeededLevel,
+      difficulty: currentAction
+        ? `Level ${currentLevel} · ${currentAction.symbolCount} symbols · ${currentAction.trialCount} trials`
+        : `Level ${currentLevel}`,
+      accuracy: totalPossible > 0 ? Math.min(1, totalCorrect / totalPossible) : undefined,
+      reactionTime: avgResponseTime,
+      timeEfficiency: currentAction ? Math.max(0, Math.min(1, timeLeft / currentAction.timeLimit)) : undefined,
+    });
   };
 
   const endGame = () => {
