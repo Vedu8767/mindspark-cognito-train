@@ -66,7 +66,7 @@ const DEFAULT_WEIGHTS: Weights = { accuracy: 0.5, completed: 0.3, timeEfficiency
 
 function metricValue(t: RewardTelemetry, key: string): number | undefined {
   if (key === 'completed') return t.completed ? 1 : 0;
-  const v = (t as Record<string, unknown>)[key];
+  const v = (t as unknown as Record<string, unknown>)[key];
   return typeof v === 'number' && Number.isFinite(v) ? clamp01(v) : undefined;
 }
 
