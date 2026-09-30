@@ -1,3 +1,4 @@
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { RotateCcw, Home, Trophy, Navigation, MapPin, Target, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface SpatialNavigationGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
@@ -319,7 +320,15 @@ const SpatialNavigationGame = ({ onComplete, onExit }: SpatialNavigationGameProp
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    onComplete({
+      score,
+      level: currentLevel,
+      duration: Math.round((Date.now() - sessionStart) / 1000),
+      completed: succeededLevel,
+      difficulty: currentAction ? `${currentAction.trialCount} routes` : 'Adaptive',
+      accuracy: currentAction ? Math.min(1, correct / Math.max(1, currentAction.trialCount)) : undefined,
+      moves: totalMoves,
+    });
   };
 
   const endGame = () => {

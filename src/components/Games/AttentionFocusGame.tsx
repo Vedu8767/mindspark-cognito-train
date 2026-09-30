@@ -1,3 +1,4 @@
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Target, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,7 +34,7 @@ const getColorClasses = (color: TargetColor): string => {
 };
 
 interface AttentionFocusGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
@@ -285,13 +286,37 @@ const AttentionFocusGame = ({ onComplete, onExit }: AttentionFocusGameProps) => 
 
   const handleReplay = async () => {
     await saveLevel(currentLevel, { incrementSessions: true });
+    // Full reset of transient round state, then re-select/apply a fresh action.
+    setTargets([]);
+    setHits(0);
+    setMisses(0);
+    setCombo(0);
+    setMaxCombo(0);
+    setScore(0);
+    setGameStarted(false);
+    reactionTimesRef.current = [];
+    totalTargetsSpawnedRef.current = 0;
+    lastSpawnTimeRef.current = 0;
     setLevelComplete(false);
+    initializeLevel();
   };
 
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(finalScore);
+    const attempts = hits + misses;
+    const rts = reactionTimesRef.current;
+    onComplete({
+      score: finalScore,
+      level: currentLevel,
+      duration: Math.round((Date.now() - sessionStartRef.current) / 1000),
+      completed: succeededLevel,
+      difficulty: gameConfig ? `${gameConfig.targetCount} targets` : 'Adaptive',
+      accuracy: attempts > 0 ? hits / attempts : undefined,
+      reactionTime: rts.length > 0 ? rts.reduce((a, b) => a + b, 0) / rts.length : undefined,
+      moves: attempts,
+      consistency: gameConfig ? Math.min(1, maxCombo / Math.max(1, gameConfig.targetCount)) : undefined,
+    });
   };
 
   if (gameComplete) {

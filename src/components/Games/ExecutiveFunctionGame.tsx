@@ -1,3 +1,4 @@
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
 import { useState, useEffect, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface ExecutiveFunctionGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
@@ -322,7 +323,7 @@ const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProp
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
     const duration = Math.round((Date.now() - levelStartTime) / 1000);
-    (onComplete as any)({
+    onComplete({
       score,
       level: currentLevel,
       duration,

@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Puzzle, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,11 +12,12 @@ import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface TowerOfHanoiGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
 const TowerOfHanoiGame = ({ onComplete, onExit }: TowerOfHanoiGameProps) => {
+  const sessionStartRef = useRef(Date.now());
   const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('tower-of-hanoi');
   const [towers, setTowers] = useState<number[][]>([[], [], []]);
   const [selectedTower, setSelectedTower] = useState<number | null>(null);
@@ -210,7 +212,16 @@ const TowerOfHanoiGame = ({ onComplete, onExit }: TowerOfHanoiGameProps) => {
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    onComplete({
+      score,
+      level: currentLevel,
+      duration: Math.round((Date.now() - sessionStartRef.current) / 1000),
+      completed: succeededLevel,
+      difficulty: currentConfig ? `${currentConfig.diskCount} disks` : 'Adaptive',
+      accuracy: currentConfig ? (succeededLevel ? 1 : 0) : undefined,
+      moves,
+      moveEfficiency: currentConfig && moves > 0 ? Math.min(1, (Math.pow(2, currentConfig.diskCount) - 1) / moves) : undefined,
+    });
   };
 
   const startGame = () => {
