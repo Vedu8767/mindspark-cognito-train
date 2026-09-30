@@ -18,22 +18,7 @@ import { soundManager } from '@/lib/soundManager';
 import { computeReward, speedFromReactionTime } from '@/lib/bandit/reward';
 import { POLICY_VERSION } from '@/lib/bandit/policy';
 
-/** Payload each game sends back when the user explicitly chooses Save & Exit. */
-export interface GameCompletionPayload {
-  score: number;
-  level: number;
-  duration: number; // seconds played in this session
-  completed: boolean;
-  difficulty?: string;
-  accuracy?: number;
-  reactionTime?: number;
-  moves?: number;
-}
-
-type GameComponentProps = {
-  onComplete: (payload: GameCompletionPayload | number) => void;
-  onExit: () => void;
-};
+import type { GameCompletionPayload, GameComponentProps } from '@/lib/gameCompletion';
 
 // Lazy-loaded game components at module scope
 const LAZY_GAMES: Record<string, ComponentType<GameComponentProps>> = {
@@ -96,20 +81,19 @@ const AppLayout = () => {
     };
   }, []);
 
-  const handleGameComplete = (payload: GameCompletionPayload | number) => {
+  const handleGameComplete = (payload: GameCompletionPayload) => {
     const gameId = currentGame || '';
     const meta = GAME_META[gameId] || { name: gameId, domain: 'memory' };
 
-    // Backwards-compat: some games still call onComplete(score). Normalize.
-    const data: GameCompletionPayload =
-      typeof payload === 'number'
-        ? { score: payload, level: 1, duration: 0, completed: true, difficulty: 'Adaptive' }
-        : { difficulty: 'Adaptive', ...payload };
+    const data: GameCompletionPayload = { difficulty: 'Adaptive', ...payload };
 
     const rewardResult = computeReward(gameId, {
       completed: data.completed,
       accuracy: data.accuracy,
       speed: data.reactionTime ? speedFromReactionTime(data.reactionTime) : undefined,
+      timeEfficiency: data.timeEfficiency,
+      moveEfficiency: data.moveEfficiency,
+      consistency: data.consistency,
     });
 
     addGameHistory({

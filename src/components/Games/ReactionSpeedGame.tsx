@@ -118,6 +118,10 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     setBanditStats(reactionBandit.getStats());
   }, [buildContext]);
 
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
+
   useEffect(() => {
     if (progressLoaded) initializeLevel();
     // eslint-disable-next-line react-hooks/exhaustive-deps

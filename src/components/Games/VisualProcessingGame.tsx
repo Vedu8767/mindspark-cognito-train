@@ -1,5 +1,5 @@
 import type { GameCompletionPayload } from '@/lib/gameCompletion';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Eye, Clock, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { visualProcessingBandit, type VisualContext, type VisualAction } from '@/lib/bandit/visualProcessingBandit';
@@ -32,6 +32,7 @@ const COLORS = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'
 const SHAPES = ['circle', 'square', 'triangle', 'diamond'] as const;
 
 const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps) => {
+  const sessionStartRef = useRef(Date.now());
   const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('visual-processing');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [trials, setTrials] = useState<Trial[]>([]);
@@ -235,7 +236,7 @@ const VisualProcessingGame = ({ onComplete, onExit }: VisualProcessingGameProps)
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    const duration = Math.round((Date.now() - levelStartTime) / 1000);
+    const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
     onComplete({
       score,
       level: currentLevel,

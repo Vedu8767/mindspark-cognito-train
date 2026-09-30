@@ -56,6 +56,11 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
   const [responseTimes, setResponseTimes] = useState<number[]>([]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const getTimeOfDay = (): 'morning' | 'afternoon' | 'evening' => {
     const hour = new Date().getHours();
@@ -154,8 +159,10 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
     
     for (let i = 0; i < sequence.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 200));
+      if (!mountedRef.current) return;
       playTone(TONES[sequence[i]].frequency, toneDuration);
       await new Promise(resolve => setTimeout(resolve, playbackDelay));
+      if (!mountedRef.current) return;
     }
     setIsPlaying(false);
     setGamePhase('repeat');
