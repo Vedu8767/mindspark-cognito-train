@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { executiveFunctionBandit, type ExecutiveContext, type ExecutiveAction } from '@/lib/bandit/executiveFunctionBandit';
@@ -6,7 +7,7 @@ import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface ExecutiveFunctionGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
@@ -26,6 +27,7 @@ const COLORS = ['red', 'blue', 'green', 'yellow', 'purple'];
 const COLOR_WORDS = ['RED', 'BLUE', 'GREEN', 'YELLOW', 'PURPLE'];
 
 const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProps) => {
+  const sessionStartRef = useRef(Date.now());
   const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('executive-function');
   const [currentTask, setCurrentTask] = useState(0);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -321,8 +323,8 @@ const ExecutiveFunctionGame = ({ onComplete, onExit }: ExecutiveFunctionGameProp
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    const duration = Math.round((Date.now() - levelStartTime) / 1000);
-    (onComplete as any)({
+    const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
+    onComplete({
       score,
       level: currentLevel,
       duration,

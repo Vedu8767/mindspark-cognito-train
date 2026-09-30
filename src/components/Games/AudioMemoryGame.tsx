@@ -1,3 +1,4 @@
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Volume2, Play, Brain, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface AudioMemoryGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
@@ -27,6 +28,7 @@ const TONES = [
 ];
 
 const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
+  const sessionStartRef = useRef(Date.now());
   const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('audio-memory');
   const [currentTrial, setCurrentTrial] = useState(0);
   const [sequence, setSequence] = useState<number[]>([]);
@@ -54,6 +56,11 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
   const [responseTimes, setResponseTimes] = useState<number[]>([]);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const getTimeOfDay = (): 'morning' | 'afternoon' | 'evening' => {
     const hour = new Date().getHours();
@@ -152,8 +159,10 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
     
     for (let i = 0; i < sequence.length; i++) {
       await new Promise(resolve => setTimeout(resolve, 200));
+      if (!mountedRef.current) return;
       playTone(TONES[sequence[i]].frequency, toneDuration);
       await new Promise(resolve => setTimeout(resolve, playbackDelay));
+      if (!mountedRef.current) return;
     }
     setIsPlaying(false);
     setGamePhase('repeat');
@@ -259,7 +268,15 @@ const AudioMemoryGame = ({ onComplete, onExit }: AudioMemoryGameProps) => {
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    onComplete({
+      score,
+      level: currentLevel,
+      duration: Math.round((Date.now() - sessionStartRef.current) / 1000),
+      completed: succeededLevel,
+      difficulty: currentConfig ? `${currentConfig.trialCount} trials` : 'Adaptive',
+      accuracy: currentConfig ? Math.min(1, correct / Math.max(1, currentConfig.trialCount)) : undefined,
+      reactionTime: responseTimes.length > 0 ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length : undefined,
+    });
   };
 
   const startGame = () => {

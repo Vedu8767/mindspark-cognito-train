@@ -1,3 +1,4 @@
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
 import { useState, useEffect, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Brain, Sparkles, TrendingUp, TrendingDown, Minus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface WordMemoryGameProps {
-  onComplete: (payload: any) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
@@ -19,6 +20,7 @@ const WORD_LISTS = {
 };
 
 const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
+  const sessionStartRef = useRef(Date.now());
   const { level: savedLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('word-memory');
   const [gamePhase, setGamePhase] = useState<'instructions' | 'study' | 'recall' | 'results' | 'complete'>('instructions');
   const [wordsToStudy, setWordsToStudy] = useState<string[]>([]);
@@ -223,7 +225,7 @@ const WordMemoryGame = ({ onComplete, onExit }: WordMemoryGameProps) => {
   const handleSaveAndExit = async () => {
     const target = succeededLevel && savedLevel < 25 ? savedLevel + 1 : savedLevel;
     await saveLevel(target, { incrementSessions: true });
-    const duration = Math.round((Date.now() - levelStartTime) / 1000);
+    const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
     onComplete({
       score,
       level: savedLevel,

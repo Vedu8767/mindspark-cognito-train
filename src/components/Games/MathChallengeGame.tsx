@@ -1,3 +1,4 @@
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { RotateCcw, Home, Trophy, Calculator, Timer, Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,7 @@ interface Problem {
 }
 
 const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
+  const sessionStartRef = useRef(Date.now());
   const { level: savedLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('math-challenge');
   const [problems, setProblems] = useState<Problem[]>([]);
   const [currentProblem, setCurrentProblem] = useState(0);
@@ -258,7 +260,15 @@ const MathChallengeGame = ({ onComplete, onExit }: MathChallengeGameProps) => {
   const handleSaveAndExit = async () => {
     const levelToSave = succeededLevel && savedLevel < 25 ? savedLevel + 1 : savedLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(score);
+    const n = currentAction?.problemCount ?? 0;
+    onComplete({
+      score,
+      level: savedLevel,
+      duration: Math.round((Date.now() - sessionStartRef.current) / 1000),
+      completed: succeededLevel,
+      difficulty: currentAction ? `Level ${savedLevel} · ${currentAction.problemCount} problems` : 'Adaptive',
+      accuracy: n > 0 ? Math.min(1, correct / n) : undefined,
+    });
   };
 
   const endGame = () => {

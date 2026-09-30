@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
+import { useState, useEffect, useRef } from 'react';
 import { Home, Target, Clock, Brain, Sparkles, Trophy, Star, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,11 +17,12 @@ interface Card {
 }
 
 interface MemoryMatchingGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
 const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => {
+  const sessionStartRef = useRef(Date.now());
   const { level: currentLevel, save: saveLevel, loaded: progressLoaded } = useGameProgress('memory-matching');
   const [cards, setCards] = useState<Card[]>([]);
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
@@ -265,7 +267,16 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
     const succeeded = matches === gameConfig?.symbolCount;
     const levelToSave = succeeded && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
-    onComplete(computeScore());
+    onComplete({
+      score: computeScore(),
+      level: currentLevel,
+      duration: Math.round((Date.now() - sessionStartRef.current) / 1000),
+      completed: succeeded,
+      difficulty: gameConfig ? `${gameConfig.symbolCount} pairs` : 'Adaptive',
+      accuracy: moves > 0 ? Math.min(1, matches / moves) : undefined,
+      moves,
+      moveEfficiency: gameConfig && moves > 0 ? Math.min(1, gameConfig.symbolCount / moves) : undefined,
+    });
   };
 
   const getDifficultyColor = () => {
@@ -384,7 +395,7 @@ const MemoryMatchingGame = ({ onComplete, onExit }: MemoryMatchingGameProps) => 
         </div>
 
         {/* Game Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: `repeat(${Math.max(2, Math.min(6, gameConfig?.gridSize ?? 4))}, minmax(0, 1fr))` }}>
           <div className="glass-card p-4 text-center">
             <div className="flex items-center justify-center mb-2">
               <Clock className="h-4 w-4 text-primary mr-1" />

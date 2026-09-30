@@ -1,3 +1,4 @@
+import type { GameCompletionPayload } from '@/lib/gameCompletion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { RotateCcw, Home, Trophy, Zap, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { useGameProgress } from '@/hooks/useGameProgress';
 import LevelCompleteScreen, { type DifficultyPrediction } from '@/components/Games/LevelCompleteScreen';
 
 interface ReactionSpeedGameProps {
-  onComplete: (score: number) => void;
+  onComplete: (payload: GameCompletionPayload) => void;
   onExit: () => void;
 }
 
@@ -116,6 +117,10 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     levelStartRef.current = Date.now();
     setBanditStats(reactionBandit.getStats());
   }, [buildContext]);
+
+  useEffect(() => () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+  }, []);
 
   useEffect(() => {
     if (progressLoaded) initializeLevel();
@@ -285,7 +290,7 @@ const ReactionSpeedGame = ({ onComplete, onExit }: ReactionSpeedGameProps) => {
     const levelToSave = succeededLevel && currentLevel < 25 ? currentLevel + 1 : currentLevel;
     await saveLevel(levelToSave, { incrementSessions: true });
     const duration = Math.round((Date.now() - sessionStartRef.current) / 1000);
-    (onComplete as any)({
+    onComplete({
       score,
       level: currentLevel,
       duration,
